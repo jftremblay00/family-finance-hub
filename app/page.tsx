@@ -47,7 +47,7 @@ import { loadData, resetData, saveData } from "@/lib/storage";
 import type { AppData, BabyCategory, Category, ImportHistory, RegistryStatus, Tag, Transaction } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input, Select } from "@/components/ui/input";
+import { Input, Select, Textarea } from "@/components/ui/input";
 import { cn } from "@/components/ui/utils";
 import { ActivityRow, InsightCard, MetricCard, MiniRail, PageIntro, SectionHeader, StatusBadge } from "@/components/design-system";
 
@@ -498,6 +498,15 @@ function StatementImport({ data, updateData }: { data: AppData; updateData: (nex
 
 function Transactions({ data, updateData, selectedMonth }: { data: AppData; updateData: (next: AppData | ((current: AppData) => AppData), message?: string) => void; selectedMonth: string }) {
   const [filters, setFilters] = useState({ month: selectedMonth, category: "All", tag: "All", cardholder: "All", search: "" });
+  const [manual, setManual] = useState({
+    date: new Date().toISOString().slice(0, 10),
+    merchant: "",
+    amount: "",
+    cardholder: "JF" as Transaction["cardholder"],
+    category: "Review" as Category,
+    tag: "Other" as Tag,
+    notes: "",
+  });
   const transactions = activeTransactions(data);
   const filtered = transactions.filter((transaction) => {
     return (
@@ -513,17 +522,60 @@ function Transactions({ data, updateData, selectedMonth }: { data: AppData; upda
     updateData((current) => ({ ...current, transactions: current.transactions.map((item) => (item.id === id ? { ...item, ...patch } : item)) }), "Transaction updated");
   }
 
+  function addManualTransaction() {
+    if (!manual.date || !manual.merchant.trim() || !manual.amount) return;
+    const id = `manual-${Date.now()}`;
+    const transaction: Transaction = {
+      id,
+      date: manual.date,
+      merchant: manual.merchant.trim().toUpperCase(),
+      amount: Number(manual.amount),
+      cardholder: manual.cardholder,
+      statementMonth: manual.date.slice(0, 7),
+      category: manual.category,
+      tag: manual.tag,
+      notes: manual.notes.trim(),
+      sourceType: "manual",
+      sourceId: id,
+    };
+    updateData((current) => ({ ...current, transactions: [transaction, ...current.transactions] }), "Manual transaction added");
+    setManual({ ...manual, merchant: "", amount: "", notes: "" });
+  }
+
   return (
     <div className="space-y-4">
       <div className="rounded-lg border border-border/70 bg-card p-3 text-sm text-muted-foreground">
         Showing transactions from <span className="font-medium text-foreground">{data.settings.startDate}</span> onward. Card payments are excluded during import.
       </div>
+      <Card>
+        <CardHeader>
+          <CardTitle>Add transaction</CardTitle>
+          <p className="text-sm text-muted-foreground">Use this for manual adjustments, cash purchases, or anything that did not come from a statement or receipt.</p>
+        </CardHeader>
+        <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <Input type="date" value={manual.date} onChange={(event) => setManual({ ...manual, date: event.target.value })} />
+          <Input placeholder="Merchant" value={manual.merchant} onChange={(event) => setManual({ ...manual, merchant: event.target.value })} />
+          <Input type="number" placeholder="Amount" value={manual.amount} onChange={(event) => setManual({ ...manual, amount: event.target.value })} />
+          <Select value={manual.cardholder} onChange={(event) => setManual({ ...manual, cardholder: event.target.value as Transaction["cardholder"] })}>
+            <option>JF</option>
+            <option>Jade</option>
+          </Select>
+          <Select value={manual.category} onChange={(event) => setManual({ ...manual, category: event.target.value as Category })}>
+            {categories.map((category) => <option key={category}>{category}</option>)}
+          </Select>
+          <Select value={manual.tag} onChange={(event) => setManual({ ...manual, tag: event.target.value as Tag })}>
+            {tags.map((tag) => <option key={tag}>{tag}</option>)}
+          </Select>
+          <Textarea className="md:col-span-2" placeholder="Note" value={manual.notes} onChange={(event) => setManual({ ...manual, notes: event.target.value })} />
+          <Button className="md:col-span-2 xl:col-span-4" onClick={addManualTransaction}><Plus className="size-4" /> Add transaction</Button>
+        </CardContent>
+      </Card>
       <FilterBar filters={filters} setFilters={setFilters} months={[...new Set(transactions.map((item) => item.statementMonth))].sort().reverse()} />
       <div className="overflow-x-auto rounded-lg border border-border bg-card">
-        <table className="w-full min-w-[760px] text-left text-sm">
+        <table className="w-full min-w-[980px] text-left text-sm">
           <thead className="border-b border-border bg-muted/60 text-xs uppercase text-muted-foreground">
             <tr>
-              {["Date", "Merchant", "Amount", "Cardholder", "Category", "Tag"].map((header) => (
+              {["Date", "Merchant", "Amount", "Cardholder", "Category", "Tag", "Note"].map((header) => (
                 <th key={header} className="px-3 py-3 font-semibold">{header}</th>
               ))}
             </tr>
@@ -549,6 +601,14 @@ function Transactions({ data, updateData, selectedMonth }: { data: AppData; upda
                   <Select value={transaction.tag} onChange={(event) => patchTransaction(transaction.id, { tag: event.target.value as Tag })}>
                     {tags.map((tag) => <option key={tag}>{tag}</option>)}
                   </Select>
+                </td>
+                <td className="px-3 py-3">
+                  <Textarea
+                    className="min-h-10"
+                    placeholder="Add note"
+                    value={transaction.notes}
+                    onChange={(event) => patchTransaction(transaction.id, { notes: event.target.value })}
+                  />
                 </td>
               </tr>
             ))}
