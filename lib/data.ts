@@ -50,6 +50,9 @@ export const initialRules: Rule[] = [
 ];
 
 export const initialData: AppData = {
+  settings: {
+    startDate: "2026-02-28",
+  },
   transactions: [
     tx("2026-06-03", "SAVE ON FOODS 902", 186.42, "JF", "2026-06", "Shared", "Grocery"),
     tx("2026-06-04", "CLAUDE AI", 31.49, "JF", "2026-06", "JF Personal", "Subscription"),

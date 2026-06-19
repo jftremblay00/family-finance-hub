@@ -4,6 +4,7 @@ import {
   AlertCircle,
   Baby,
   Camera,
+  CalendarDays,
   Check,
   CreditCard,
   Download,
@@ -24,6 +25,9 @@ import {
 import { useEffect, useMemo, useState } from "react";
 import { babyCategories, categories, registryStatuses, tags } from "@/lib/data";
 import {
+  activeBabyPurchases,
+  activeRentLedger,
+  activeTransactions,
   applyRules,
   calculateSummary,
   createRule,
@@ -128,7 +132,7 @@ export default function FamilyFinanceHub() {
             {toast}
           </div>
 
-          {tab === "dashboard" && <Dashboard data={data} summary={summary} month={selectedMonth} setTab={setTab} />}
+          {tab === "dashboard" && <Dashboard data={data} summary={summary} month={selectedMonth} setTab={setTab} updateData={updateData} />}
           {tab === "import" && <StatementImport data={data} updateData={updateData} />}
           {tab === "transactions" && <Transactions data={data} updateData={updateData} selectedMonth={selectedMonth} />}
           {tab === "review" && <ReviewQueue data={data} updateData={updateData} />}
@@ -200,15 +204,29 @@ function NavButton({
   );
 }
 
-function Dashboard({ data, summary, month, setTab }: { data: AppData; summary: ReturnType<typeof calculateSummary>; month: string; setTab: (tab: Tab) => void }) {
-  const review = data.transactions.filter((transaction) => transaction.category === "Review");
-  const latest = [...data.transactions].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 5);
-  const babyBreakdown = data.babyPurchases.reduce<Record<string, number>>((groups, item) => {
+function Dashboard({
+  data,
+  summary,
+  month,
+  setTab,
+  updateData,
+}: {
+  data: AppData;
+  summary: ReturnType<typeof calculateSummary>;
+  month: string;
+  setTab: (tab: Tab) => void;
+  updateData: (next: AppData | ((current: AppData) => AppData), message?: string) => void;
+}) {
+  const transactions = activeTransactions(data);
+  const babyPurchases = activeBabyPurchases(data);
+  const review = transactions.filter((transaction) => transaction.category === "Review");
+  const latest = [...transactions].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 5);
+  const babyBreakdown = babyPurchases.reduce<Record<string, number>>((groups, item) => {
     groups[item.category] = (groups[item.category] ?? 0) + item.amount;
     return groups;
   }, {});
   const topBabyCategory = Object.entries(babyBreakdown).sort((a, b) => b[1] - a[1])[0];
-  const largestMonthly = [...data.transactions.filter((transaction) => transaction.statementMonth === month)].sort((a, b) => b.amount - a.amount)[0];
+  const largestMonthly = [...transactions.filter((transaction) => transaction.statementMonth === month)].sort((a, b) => b.amount - a.amount)[0];
   const kpis = [
     { label: "Net position", value: netPositionCopy(summary.netPosition), detail: `${currency(summary.sharedOwedToJF)} shared half - ${currency(summary.rentCredits)} rent`, tone: "ink" as const, icon: <Scale className="size-4" />, action: "See math" },
     { label: "Shared this month", value: currency(summary.shared), detail: `${monthLabel(month)} household spend`, tone: "paper" as const, icon: <WalletCards className="size-4" /> },
@@ -221,11 +239,14 @@ function Dashboard({ data, summary, month, setTab }: { data: AppData; summary: R
       <PageIntro
         eyebrow={monthLabel(month)}
         title="A calm read on shared money."
-        description="See what is shared, what needs attention, and how rent credits change the balance between JF and Jade."
+        description={`Tracking starts ${data.settings.startDate}. Older settled statement activity stays out of the ledger.`}
         action={
-          <Button variant="secondary" onClick={() => setTab("import")}>
-            <Upload className="size-4" /> Import statement
-          </Button>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <StartDateControl data={data} updateData={updateData} />
+            <Button variant="secondary" onClick={() => setTab("import")}>
+              <Upload className="size-4" /> Import statement
+            </Button>
+          </div>
         }
       />
 
@@ -300,12 +321,38 @@ function Dashboard({ data, summary, month, setTab }: { data: AppData; summary: R
       <section>
         <SectionHeader title="Family planning" description="Baby spending and registry progress stay visible without crowding the finance view." actionLabel="Open baby hub" onAction={() => setTab("baby")} />
         <div className="grid gap-3 md:grid-cols-3">
-          <MetricCard label="Baby total" value={currency(summary.babyAllTime)} detail="All tracked purchases" tone="coral" icon={<Baby className="size-4" />} />
+          <MetricCard label="Baby total" value={currency(summary.babyAllTime)} detail="Since start date" tone="coral" icon={<Baby className="size-4" />} />
           <MetricCard label="Registry" value={`${data.registry.filter((item) => item.status !== "Needed").length}/${data.registry.length}`} detail="Purchased or gifted" tone="paper" icon={<ReceiptText className="size-4" />} />
-          <MetricCard label="Rent credits" value={currency(summary.rentCredits)} detail="Cumulative credits" tone="mint" icon={<PiggyBank className="size-4" />} />
+          <MetricCard label="Rent credits" value={currency(summary.rentCredits)} detail="Since start date" tone="mint" icon={<PiggyBank className="size-4" />} />
         </div>
       </section>
     </div>
+  );
+}
+
+function StartDateControl({ data, updateData }: { data: AppData; updateData: (next: AppData | ((current: AppData) => AppData), message?: string) => void }) {
+  return (
+    <label className="flex h-10 items-center gap-2 rounded-lg border border-border/80 bg-card px-3 text-sm shadow-sm">
+      <CalendarDays className="size-4 text-muted-foreground" />
+      <span className="hidden text-muted-foreground sm:inline">Start</span>
+      <input
+        type="date"
+        value={data.settings.startDate}
+        onChange={(event) =>
+          updateData(
+            (current) => ({
+              ...current,
+              settings: {
+                ...current.settings,
+                startDate: event.target.value,
+              },
+            }),
+            `Tracking starts ${event.target.value}`,
+          )
+        }
+        className="h-8 border-0 bg-transparent p-0 text-sm focus:ring-0"
+      />
+    </label>
   );
 }
 
@@ -320,13 +367,13 @@ function FormulaRow({ label, value, strong = false }: { label: string; value: st
 
 function StatementImport({ data, updateData }: { data: AppData; updateData: (next: AppData | ((current: AppData) => AppData), message?: string) => void }) {
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState("Upload a BMO Mastercard PDF. If statement text is unusual, the app still creates sample reviewable rows.");
+  const [message, setMessage] = useState(`Upload a BMO Mastercard PDF. Imports start from ${data.settings.startDate}; card payments are skipped.`);
 
   async function onFile(file?: File) {
     if (!file) return;
     setBusy(true);
     try {
-      const transactions = await extractPdfTransactions(file, data.rules);
+      const transactions = await extractPdfTransactions(file, data.rules, data.settings.startDate);
       const statementMonth = transactions[0]?.statementMonth ?? currentStatementMonth(data.transactions);
       updateData(
         (current) => ({
@@ -336,7 +383,7 @@ function StatementImport({ data, updateData }: { data: AppData; updateData: (nex
         }),
         `Imported ${transactions.length} transactions from ${file.name}`,
       );
-      setMessage(`${transactions.length} transactions imported. ${transactions.filter((item) => item.category === "Review").length} need review.`);
+      setMessage(`${transactions.length} transactions imported from ${data.settings.startDate} onward. Card payments were skipped.`);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Import failed");
     } finally {
@@ -349,9 +396,16 @@ function StatementImport({ data, updateData }: { data: AppData; updateData: (nex
       <Card>
         <CardHeader>
           <CardTitle>Statement import</CardTitle>
-          <p className="text-sm text-muted-foreground">Parse BMO Mastercard PDFs, detect cardholder sections, apply merchant rules, and send unknowns to review.</p>
+          <p className="text-sm text-muted-foreground">Parse BMO Mastercard PDFs, skip card payments, apply the start date, and send unknown merchants to review.</p>
         </CardHeader>
         <CardContent className="space-y-4">
+          <div className="rounded-lg border border-border/70 bg-muted/35 p-4">
+            <p className="text-sm font-semibold">Expense start date</p>
+            <p className="mt-1 text-sm text-muted-foreground">Transactions before this date are ignored in imports, dashboard math, review, and exports.</p>
+            <div className="mt-3 max-w-xs">
+              <StartDateControl data={data} updateData={updateData} />
+            </div>
+          </div>
           <label className="flex min-h-44 cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-border bg-muted/40 px-4 text-center transition hover:bg-muted">
             <Upload className="mb-3 size-6 text-muted-foreground" />
             <span className="text-sm font-medium">{busy ? "Parsing statement..." : "Choose BMO Mastercard PDF"}</span>
@@ -382,7 +436,8 @@ function StatementImport({ data, updateData }: { data: AppData; updateData: (nex
 
 function Transactions({ data, updateData, selectedMonth }: { data: AppData; updateData: (next: AppData | ((current: AppData) => AppData), message?: string) => void; selectedMonth: string }) {
   const [filters, setFilters] = useState({ month: selectedMonth, category: "All", tag: "All", cardholder: "All", search: "" });
-  const filtered = data.transactions.filter((transaction) => {
+  const transactions = activeTransactions(data);
+  const filtered = transactions.filter((transaction) => {
     return (
       (filters.month === "All" || transaction.statementMonth === filters.month) &&
       (filters.category === "All" || transaction.category === filters.category) &&
@@ -398,7 +453,10 @@ function Transactions({ data, updateData, selectedMonth }: { data: AppData; upda
 
   return (
     <div className="space-y-4">
-      <FilterBar filters={filters} setFilters={setFilters} months={[...new Set(data.transactions.map((item) => item.statementMonth))].sort().reverse()} />
+      <div className="rounded-lg border border-border/70 bg-card p-3 text-sm text-muted-foreground">
+        Showing transactions from <span className="font-medium text-foreground">{data.settings.startDate}</span> onward. Card payments are excluded during import.
+      </div>
+      <FilterBar filters={filters} setFilters={setFilters} months={[...new Set(transactions.map((item) => item.statementMonth))].sort().reverse()} />
       <div className="overflow-x-auto rounded-lg border border-border bg-card">
         <table className="w-full min-w-[760px] text-left text-sm">
           <thead className="border-b border-border bg-muted/60 text-xs uppercase text-muted-foreground">
@@ -476,7 +534,7 @@ function FilterBar({
 }
 
 function ReviewQueue({ data, updateData }: { data: AppData; updateData: (next: AppData | ((current: AppData) => AppData), message?: string) => void }) {
-  const review = data.transactions.filter((transaction) => transaction.category === "Review");
+  const review = activeTransactions(data).filter((transaction) => transaction.category === "Review");
 
   function classify(transaction: Transaction, category: Category, tag: Tag, remember: boolean) {
     updateData((current) => {
@@ -533,7 +591,8 @@ function ReviewItem({ transaction, onClassify }: { transaction: Transaction; onC
 
 function RentLedger({ data, updateData }: { data: AppData; updateData: (next: AppData | ((current: AppData) => AppData), message?: string) => void }) {
   const [form, setForm] = useState({ date: "2026-07-01", amount: "850", description: "Jade paid JF rent" });
-  const total = data.rentLedger.reduce((sum, item) => sum + item.amount, 0);
+  const rentLedger = activeRentLedger(data);
+  const total = rentLedger.reduce((sum, item) => sum + item.amount, 0);
 
   function addEntry() {
     updateData((current) => ({
@@ -558,7 +617,7 @@ function RentLedger({ data, updateData }: { data: AppData; updateData: (next: Ap
         </CardContent>
       </Card>
       <div className="overflow-hidden rounded-lg border border-border bg-card">
-        {data.rentLedger.map((entry) => (
+        {rentLedger.map((entry) => (
           <div key={entry.id} className="flex items-center justify-between gap-4 border-b border-border p-4 last:border-b-0">
             <div><p className="text-sm font-medium">{entry.description}</p><p className="text-xs text-muted-foreground">{entry.date}</p></div>
             <p className="font-semibold">{currency(entry.amount)}</p>
@@ -571,8 +630,9 @@ function RentLedger({ data, updateData }: { data: AppData; updateData: (next: Ap
 
 function BabySpending({ data, updateData }: { data: AppData; updateData: (next: AppData | ((current: AppData) => AppData), message?: string) => void }) {
   const [form, setForm] = useState({ date: new Date().toISOString().slice(0, 10), item: "", category: "Other" as BabyCategory, amount: "", notes: "" });
-  const total = data.babyPurchases.reduce((sum, item) => sum + item.amount, 0);
-  const breakdown = babyCategories.map((category) => ({ category, amount: data.babyPurchases.filter((item) => item.category === category).reduce((sum, item) => sum + item.amount, 0) }));
+  const babyPurchases = activeBabyPurchases(data);
+  const total = babyPurchases.reduce((sum, item) => sum + item.amount, 0);
+  const breakdown = babyCategories.map((category) => ({ category, amount: babyPurchases.filter((item) => item.category === category).reduce((sum, item) => sum + item.amount, 0) }));
   const max = Math.max(...breakdown.map((item) => item.amount), 1);
 
   function addPurchase() {
@@ -766,7 +826,7 @@ function SheetsSync({ data, onReset }: { data: AppData; onReset: () => void }) {
   return (
     <div className="space-y-4">
       <Card>
-        <CardHeader><CardTitle>Google Sheets sync</CardTitle><p className="text-sm text-muted-foreground">Tabs: Transactions, Rules, Rent Ledger, Baby Purchases, Baby Registry, Monthly Summary.</p></CardHeader>
+        <CardHeader><CardTitle>Google Sheets sync</CardTitle><p className="text-sm text-muted-foreground">Exports active data from the start date onward, plus settings and monthly summary.</p></CardHeader>
         <CardContent className="space-y-3">
           <Input placeholder="Google Apps Script web app URL" value={endpoint} onChange={(event) => setEndpoint(event.target.value)} />
           <div className="flex flex-wrap gap-2">

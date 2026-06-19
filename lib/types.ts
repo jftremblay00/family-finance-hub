@@ -78,6 +78,9 @@ export type ImportHistory = {
 };
 
 export type AppData = {
+  settings: {
+    startDate: string;
+  };
   transactions: Transaction[];
   rules: Rule[];
   rentLedger: RentEntry[];

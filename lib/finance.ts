@@ -14,16 +14,33 @@ export function currentStatementMonth(transactions: Transaction[]) {
 }
 
 export function calculateSummary(data: AppData, month = currentStatementMonth(data.transactions)) {
-  const monthTransactions = data.transactions.filter((transaction) => transaction.statementMonth === month);
+  const transactions = activeTransactions(data);
+  const monthTransactions = transactions.filter((transaction) => transaction.statementMonth === month);
   const shared = sum(monthTransactions.filter((transaction) => transaction.category === "Shared"));
   const baby = sum(monthTransactions.filter((transaction) => transaction.category === "Baby"));
   const review = monthTransactions.filter((transaction) => transaction.category === "Review").length;
-  const rentCredits = sum(data.rentLedger);
+  const rentCredits = sum(activeRentLedger(data));
   const sharedOwedToJF = shared / 2;
   const netPosition = sharedOwedToJF - rentCredits;
-  const babyAllTime = sum(data.babyPurchases);
+  const babyAllTime = sum(activeBabyPurchases(data));
 
   return { month, shared, baby, review, rentCredits, sharedOwedToJF, netPosition, babyAllTime };
+}
+
+export function activeTransactions(data: AppData) {
+  return data.transactions.filter((transaction) => isOnOrAfterStartDate(transaction.date, data.settings.startDate));
+}
+
+export function activeRentLedger(data: AppData) {
+  return data.rentLedger.filter((entry) => isOnOrAfterStartDate(entry.date, data.settings.startDate));
+}
+
+export function activeBabyPurchases(data: AppData) {
+  return data.babyPurchases.filter((purchase) => isOnOrAfterStartDate(purchase.date, data.settings.startDate));
+}
+
+export function isOnOrAfterStartDate(date: string, startDate: string) {
+  return !startDate || date >= startDate;
 }
 
 export function netPositionCopy(netPosition: number) {
@@ -55,10 +72,11 @@ export function createRule(merchant: string, category: Category, tag: Tag): Rule
 export function exportSheets(data: AppData) {
   const monthly = buildMonthlySummary(data);
   return {
-    Transactions: data.transactions,
+    Settings: [{ startDate: data.settings.startDate }],
+    Transactions: activeTransactions(data),
     Rules: data.rules,
-    "Rent Ledger": data.rentLedger,
-    "Baby Purchases": data.babyPurchases,
+    "Rent Ledger": activeRentLedger(data),
+    "Baby Purchases": activeBabyPurchases(data),
     "Baby Registry": data.registry,
     "Monthly Summary": monthly,
   };
@@ -71,7 +89,7 @@ export function rowsToCsv(rows: Record<string, unknown>[]) {
   return [headers.join(","), ...rows.map((row) => headers.map((header) => escape(row[header])).join(","))].join("\n");
 }
 
-export async function extractPdfTransactions(file: File, rules: Rule[]): Promise<Transaction[]> {
+export async function extractPdfTransactions(file: File, rules: Rule[], startDate?: string): Promise<Transaction[]> {
   const pdfjs = await import("pdfjs-dist");
   pdfjs.GlobalWorkerOptions.workerSrc = new URL("pdfjs-dist/build/pdf.worker.mjs", import.meta.url).toString();
   const buffer = await file.arrayBuffer();
@@ -84,7 +102,7 @@ export async function extractPdfTransactions(file: File, rules: Rule[]): Promise
     text += `\n${content.items.map((item) => ("str" in item ? item.str : "")).join(" ")}`;
   }
 
-  return parseStatementText(text, rules, file.name);
+  return parseStatementText(text, rules, file.name).filter((transaction) => isOnOrAfterStartDate(transaction.date, startDate ?? ""));
 }
 
 export function parseStatementText(text: string, rules: Rule[], fileName = "BMO Mastercard statement.pdf") {
@@ -104,6 +122,7 @@ export function parseStatementText(text: string, rules: Rule[], fileName = "BMO 
     const [, monthName, day, merchant, amountText] = match;
     const date = normalizeStatementDate(monthName, day, statementMonth);
     const amount = Number(amountText.replace(/[$,]/g, ""));
+    if (isCardPaymentLine(merchant, amount)) continue;
     const base = {
       id: `imp-${Date.now()}-${transactions.length}`,
       date,
@@ -118,6 +137,13 @@ export function parseStatementText(text: string, rules: Rule[], fileName = "BMO 
 
   if (transactions.length) return transactions;
   return sampleImportedTransactions(statementMonth, rules, fileName);
+}
+
+export function isCardPaymentLine(merchant: string, amount: number) {
+  const normalized = merchant.toUpperCase().replace(/\s+/g, " ").trim();
+  const paymentPattern =
+    /\b(PAYMENT|PAYMENT RECEIVED|THANK YOU|AUTOMATIC PAYMENT|AUTO PAYMENT|ONLINE PAYMENT|BILL PAYMENT|PREAUTHORIZED PAYMENT|PRE-AUTHORIZED PAYMENT|CREDIT CARD PAYMENT)\b/;
+  return paymentPattern.test(normalized) || (amount < 0 && /\b(PAY|PMT|PYMT|CR|CREDIT)\b/.test(normalized));
 }
 
 export async function runReceiptOcr(file: File) {
@@ -197,7 +223,8 @@ function inferMonth(text: string) {
 }
 
 function buildMonthlySummary(data: AppData) {
-  const months = [...new Set(data.transactions.map((transaction) => transaction.statementMonth))].sort();
+  const transactions = activeTransactions(data);
+  const months = [...new Set(transactions.map((transaction) => transaction.statementMonth))].sort();
   return months.map((month) => {
     const summary = calculateSummary(data, month);
     return {
