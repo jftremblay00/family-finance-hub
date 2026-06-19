@@ -874,22 +874,32 @@ function SheetsSync({ data, onReset }: { data: AppData; onReset: () => void }) {
   }
 
   async function pushToEndpoint() {
-    if (!endpoint) {
+    const trimmedEndpoint = endpoint.trim();
+    if (!trimmedEndpoint) {
       setStatus("Add a Google Apps Script web app URL first.");
       return;
     }
+    if (!trimmedEndpoint.endsWith("/exec")) {
+      setStatus("Use the deployed Google Apps Script Web App URL ending in /exec.");
+      return;
+    }
     try {
-      await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(sheets) });
-      setStatus("Sync request sent");
+      await fetch(trimmedEndpoint, {
+        method: "POST",
+        mode: "no-cors",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify(sheets),
+      });
+      setStatus("Sync sent. Check the Google Sheet tabs for updated rows.");
     } catch {
-      setStatus("Sync endpoint could not be reached from this browser.");
+      setStatus("Sync could not be sent. Check the Web App URL and deployment access.");
     }
   }
 
   return (
     <div className="space-y-4">
       <Card>
-        <CardHeader><CardTitle>Google Sheets sync</CardTitle><p className="text-sm text-muted-foreground">Exports active data from the start date onward, plus settings and monthly summary.</p></CardHeader>
+        <CardHeader><CardTitle>Google Sheets sync</CardTitle><p className="text-sm text-muted-foreground">Exports active data from the start date onward. Google does not return readable browser responses, so confirm success in the Sheet tabs.</p></CardHeader>
         <CardContent className="space-y-3">
           <Input placeholder="Google Apps Script web app URL" value={endpoint} onChange={(event) => setEndpoint(event.target.value)} />
           <div className="flex flex-wrap gap-2">
