@@ -28,7 +28,7 @@ export function calculateSummary(data: AppData, month = currentStatementMonth(da
 }
 
 export function activeTransactions(data: AppData) {
-  return data.transactions.filter((transaction) => isOnOrAfterStartDate(transaction.date, data.settings.startDate));
+  return data.transactions.filter((transaction) => isOnOrAfterStartDate(transaction.date, data.settings.startDate) && !isCardPaymentLine(transaction.merchant, transaction.amount));
 }
 
 export function activeRentLedger(data: AppData) {
