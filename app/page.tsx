@@ -229,7 +229,7 @@ function Dashboard({
   const topBabyCategory = Object.entries(babyBreakdown).sort((a, b) => b[1] - a[1])[0];
   const largestMonthly = [...transactions.filter((transaction) => transaction.statementMonth === month)].sort((a, b) => b.amount - a.amount)[0];
   const kpis = [
-    { label: "Net position", value: netPositionCopy(summary.netPosition), detail: `${currency(summary.totalOwedToJF)} owed - ${currency(summary.rentCredits)} rent`, tone: "ink" as const, icon: <Scale className="size-4" />, action: "See math" },
+    { label: "Net position", value: netPositionCopy(summary.netPosition), detail: `${currency(summary.totalOwedToJF)} owed + ${currency(summary.carryOverBalance)} carry-over`, tone: "ink" as const, icon: <Scale className="size-4" />, action: "See math" },
     { label: "Shared this month", value: currency(summary.shared), detail: `${monthLabel(month)} household spend`, tone: "paper" as const, icon: <WalletCards className="size-4" /> },
     { label: "Baby this month", value: currency(summary.baby), detail: topBabyCategory ? `${topBabyCategory[0]} leads spending` : "No baby spending yet", tone: "coral" as const, icon: <Baby className="size-4" /> },
     { label: "Needs review", value: String(summary.review), detail: "Unknown merchants to classify", tone: summary.review > 0 ? ("lavender" as const) : ("mint" as const), icon: <AlertCircle className="size-4" /> },
@@ -244,6 +244,7 @@ function Dashboard({
         action={
           <div className="flex flex-col gap-2 sm:flex-row">
             <StartDateControl data={data} updateData={updateData} />
+            <CarryOverControl data={data} updateData={updateData} />
             <Button variant="secondary" onClick={() => setTab("import")}>
               <Upload className="size-4" /> Import statement
             </Button>
@@ -262,12 +263,13 @@ function Dashboard({
           <div className="space-y-4">
             <div className="rounded-lg border border-border/70 bg-muted/35 p-4">
               <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Formula</p>
-              <p className="mt-2 text-lg font-semibold tracking-[-0.02em]">Shared half + Jade personal - rent credits</p>
+              <p className="mt-2 text-lg font-semibold tracking-[-0.02em]">Shared half + Jade personal + carry-over - rent credits</p>
             </div>
             <FormulaRow label="Total shared expenses" value={currency(summary.shared)} />
             <FormulaRow label="Jade share at 50%" value={currency(summary.sharedOwedToJF)} />
             <FormulaRow label="Jade personal owed to JF" value={currency(summary.jadePersonalOwedToJF)} />
             <FormulaRow label="Total owed to JF" value={currency(summary.totalOwedToJF)} />
+            <FormulaRow label="Carry-over balance" value={currency(summary.carryOverBalance)} />
             <FormulaRow label="Rent credits paid by Jade" value={`-${currency(summary.rentCredits)}`} />
             <div className="border-t border-border/70 pt-4">
               <FormulaRow label="Net position" value={netPositionCopy(summary.netPosition)} strong />
@@ -356,6 +358,43 @@ function StartDateControl({ data, updateData }: { data: AppData; updateData: (ne
         className="h-8 border-0 bg-transparent p-0 text-sm focus:ring-0"
       />
     </label>
+  );
+}
+
+function CarryOverControl({ data, updateData }: { data: AppData; updateData: (next: AppData | ((current: AppData) => AppData), message?: string) => void }) {
+  const direction = data.settings.carryOverBalance < 0 ? "jf-owes-jade" : "jade-owes-jf";
+  const amount = Math.abs(data.settings.carryOverBalance);
+
+  function saveCarryOver(nextDirection: string, nextAmount: number) {
+    const signedAmount = nextDirection === "jf-owes-jade" ? -Math.abs(nextAmount) : Math.abs(nextAmount);
+    updateData(
+      (current) => ({
+        ...current,
+        settings: {
+          ...current.settings,
+          carryOverBalance: Number.isFinite(signedAmount) ? signedAmount : 0,
+        },
+      }),
+      "Carry-over balance updated",
+    );
+  }
+
+  return (
+    <div className="grid gap-2 rounded-lg border border-border/80 bg-card p-2 text-sm shadow-sm sm:grid-cols-[150px_120px]">
+      <Select value={direction} onChange={(event) => saveCarryOver(event.target.value, amount)}>
+        <option value="jade-owes-jf">Jade owes JF</option>
+        <option value="jf-owes-jade">JF owes Jade</option>
+      </Select>
+      <Input
+        type="number"
+        min="0"
+        step="0.01"
+        aria-label="Carry-over amount"
+        value={amount || ""}
+        placeholder="Carry-over"
+        onChange={(event) => saveCarryOver(direction, Number(event.target.value || 0))}
+      />
+    </div>
   );
 }
 

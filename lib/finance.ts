@@ -24,10 +24,11 @@ export function calculateSummary(data: AppData, month = currentStatementMonth(da
   const sharedOwedToJF = shared / 2;
   const jadePersonalOwedToJF = jadePersonal;
   const totalOwedToJF = sharedOwedToJF + jadePersonalOwedToJF;
-  const netPosition = totalOwedToJF - rentCredits;
+  const carryOverBalance = data.settings.carryOverBalance;
+  const netPosition = totalOwedToJF + carryOverBalance - rentCredits;
   const babyAllTime = sum(activeBabyPurchases(data));
 
-  return { month, shared, jadePersonal, baby, review, rentCredits, sharedOwedToJF, jadePersonalOwedToJF, totalOwedToJF, netPosition, babyAllTime };
+  return { month, shared, jadePersonal, baby, review, rentCredits, sharedOwedToJF, jadePersonalOwedToJF, totalOwedToJF, carryOverBalance, netPosition, babyAllTime };
 }
 
 export function activeTransactions(data: AppData) {
@@ -75,7 +76,7 @@ export function createRule(merchant: string, category: Category, tag: Tag): Rule
 export function exportSheets(data: AppData) {
   const monthly = buildMonthlySummary(data);
   return {
-    Settings: [{ startDate: data.settings.startDate }],
+    Settings: [{ startDate: data.settings.startDate, carryOverBalance: data.settings.carryOverBalance }],
     Transactions: activeTransactions(data),
     Rules: data.rules,
     "Rent Ledger": activeRentLedger(data),
@@ -266,6 +267,7 @@ function buildMonthlySummary(data: AppData) {
       jadeShare: summary.sharedOwedToJF,
       jadePersonal: summary.jadePersonalOwedToJF,
       totalOwedToJF: summary.totalOwedToJF,
+      carryOverBalance: summary.carryOverBalance,
       rentCredits: summary.rentCredits,
       netPosition: summary.netPosition,
       babySpending: summary.baby,

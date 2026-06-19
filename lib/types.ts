@@ -89,6 +89,7 @@ export type ImportHistory = {
 export type AppData = {
   settings: {
     startDate: string;
+    carryOverBalance: number;
   };
   transactions: Transaction[];
   rules: Rule[];

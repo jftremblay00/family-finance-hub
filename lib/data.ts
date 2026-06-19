@@ -52,6 +52,7 @@ export const initialRules: Rule[] = [
 export const initialData: AppData = {
   settings: {
     startDate: "2026-02-28",
+    carryOverBalance: 0,
   },
   transactions: [],
   rules: initialRules,
