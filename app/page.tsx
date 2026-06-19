@@ -76,7 +76,6 @@ const allTabs: { id: Tab; label: string; icon: typeof Home }[] = [
   { id: "import", label: "Import", icon: Upload },
   { id: "rent", label: "Rent", icon: Home },
   { id: "registry", label: "Registry", icon: ReceiptText },
-  { id: "projects", label: "Projects", icon: FolderKanban },
   { id: "sync", label: "Sheets", icon: RefreshCw },
 ];
 
@@ -1255,15 +1254,7 @@ function SheetsSync({
       setStatus("Add a Google Apps Script web app URL first.");
       return;
     }
-    const isAppsScriptExecUrl = (() => {
-      try {
-        const url = new URL(trimmedEndpoint);
-        return url.hostname === "script.google.com" && url.pathname.endsWith("/exec");
-      } catch {
-        return false;
-      }
-    })();
-    if (!isAppsScriptExecUrl) {
+    if (!isAppsScriptExecUrl(trimmedEndpoint)) {
       setStatus("Use the deployed Google Apps Script Web App URL ending in /exec.");
       return;
     }
@@ -1287,12 +1278,16 @@ function SheetsSync({
       setStatus("Add a Google Apps Script web app URL first.");
       return;
     }
+    if (!isAppsScriptExecUrl(trimmedEndpoint)) {
+      setStatus("Use the deployed Google Apps Script Web App URL ending in /exec, not the /dev test URL.");
+      return;
+    }
     updateData((current) => ({ ...current, settings: { ...current.settings, sheetsEndpoint: trimmedEndpoint } }), "Saved Sheets endpoint");
     try {
       await onRefresh(trimmedEndpoint);
       setStatus("Pulled the latest rows from Google Sheets.");
-    } catch {
-      setStatus("Refresh failed. Update the Apps Script code so GET export is enabled.");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Refresh failed. Update the Apps Script code so GET export is enabled.");
     }
   }
 
@@ -1343,6 +1338,15 @@ function downloadBlob(blob: Blob, fileName: string) {
 
 type SheetWorkbook = Record<string, Record<string, unknown>[]>;
 
+function isAppsScriptExecUrl(value: string) {
+  try {
+    const url = new URL(value);
+    return url.hostname === "script.google.com" && url.pathname.endsWith("/exec");
+  } catch {
+    return false;
+  }
+}
+
 function pullSheets(endpoint: string): Promise<SheetWorkbook> {
   const url = new URL(endpoint);
   url.searchParams.set("action", "export");
@@ -1357,7 +1361,12 @@ function jsonp<T>(url: string): Promise<T> {
     const callback = `familyFinanceHub_${Date.now()}_${Math.random().toString(16).slice(2)}`;
     const script = document.createElement("script");
     const separator = url.includes("?") ? "&" : "?";
+    const timer = window.setTimeout(() => {
+      cleanup();
+      reject(new Error("Refresh timed out. Open the Apps Script URL with ?action=export&callback=test and confirm it returns test({...})."));
+    }, 12000);
     const cleanup = () => {
+      window.clearTimeout(timer);
       script.remove();
       delete (window as typeof window & Record<string, unknown>)[callback];
     };
@@ -1368,7 +1377,7 @@ function jsonp<T>(url: string): Promise<T> {
     };
     script.onerror = () => {
       cleanup();
-      reject(new Error("Sheets refresh failed"));
+      reject(new Error("Apps Script did not return valid refresh data. Confirm the deployment is /exec and access is Anyone."));
     };
     script.src = `${url}${separator}callback=${callback}`;
     document.body.appendChild(script);
