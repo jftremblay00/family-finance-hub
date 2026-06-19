@@ -100,6 +100,7 @@ export function exportSheets(data: AppData) {
     Settings: [{ startDate: data.settings.startDate, carryOverBalance: data.settings.carryOverBalance }],
     Transactions: activeTransactions(data),
     "Deleted Transactions": data.transactions.filter((transaction) => transaction.deletedAt),
+    Imports: data.imports,
     Rules: data.rules,
     "Rent Ledger": activeRentLedger(data),
     "Baby Purchases": activeBabyPurchases(data),

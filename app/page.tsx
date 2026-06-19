@@ -45,7 +45,7 @@ import {
   uniqueTransactions,
 } from "@/lib/finance";
 import { loadData, resetData, saveData } from "@/lib/storage";
-import type { AppData, BabyCategory, Category, ImportHistory, Project, RegistryStatus, Tag, Transaction } from "@/lib/types";
+import type { AppData, BabyCategory, Category, ImportHistory, Project, RegistryStatus, Rule, SourceType, Tag, Transaction } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input, Select, Textarea } from "@/components/ui/input";
@@ -91,6 +91,24 @@ export default function FamilyFinanceHub() {
   useEffect(() => {
     document.documentElement.classList.toggle("dark", dark);
   }, [dark]);
+  useEffect(() => {
+    const endpoint = loadData().settings.sheetsEndpoint;
+    if (!endpoint) return;
+    let cancelled = false;
+    setToast("Refreshing from Google Sheets...");
+    pullSheets(endpoint)
+      .then((workbook) => {
+        if (cancelled) return;
+        setData((current) => mergeWorkbookIntoData(current, workbook, endpoint));
+        setToast("Refreshed from Google Sheets");
+      })
+      .catch(() => {
+        if (!cancelled) setToast("Could not refresh from Google Sheets");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const months = useMemo(() => [...new Set(data.transactions.map((transaction) => transaction.statementMonth))].sort().reverse(), [data.transactions]);
   const selectedMonth = months.includes(month) ? month : months[0] ?? "2026-06";
@@ -99,6 +117,12 @@ export default function FamilyFinanceHub() {
   function updateData(next: AppData | ((current: AppData) => AppData), message = "Saved") {
     setData((current) => (typeof next === "function" ? next(current) : next));
     setToast(message);
+  }
+
+  async function refreshFromSheets(endpoint: string) {
+    setToast("Refreshing from Google Sheets...");
+    const workbook = await pullSheets(endpoint);
+    updateData((current) => mergeWorkbookIntoData(current, workbook, endpoint), "Refreshed from Google Sheets");
   }
 
   return (
@@ -149,6 +173,8 @@ export default function FamilyFinanceHub() {
           {tab === "sync" && (
             <SheetsSync
               data={data}
+              onRefresh={refreshFromSheets}
+              updateData={updateData}
               onReset={() => {
                 resetData();
                 setData(loadData());
@@ -641,29 +667,42 @@ function Transactions({ data, updateData, selectedMonth }: { data: AppData; upda
         </CardContent>
       </Card>
       <FilterBar filters={filters} setFilters={setFilters} months={[...new Set(transactions.map((item) => item.statementMonth))].sort().reverse()} />
-      <div className="overflow-x-auto rounded-lg border border-border bg-card">
-        <table className="w-full min-w-[1180px] text-left text-sm">
+      <div className="space-y-3 lg:hidden">
+        {filtered.map((transaction) => (
+          <TransactionMobileCard
+            key={transaction.id}
+            transaction={transaction}
+            projects={data.projects}
+            patchTransaction={patchTransaction}
+            deleteTransaction={deleteTransaction}
+          />
+        ))}
+        {!filtered.length && <EmptyState title="No transactions found" detail="Adjust the filters or refresh from Google Sheets." />}
+      </div>
+      <div className="hidden overflow-x-auto rounded-lg border border-border bg-card shadow-soft lg:block">
+        <table className="w-full min-w-[1320px] text-left text-sm">
           <thead className="border-b border-border bg-muted/60 text-xs uppercase text-muted-foreground">
             <tr>
               {["Date", "Merchant", "Amount", "Cardholder", "Method", "Category", "Tag", "Project", "Note", ""].map((header) => (
-                <th key={header} className="px-3 py-3 font-semibold">{header}</th>
+                <th key={header} className="px-4 py-3 font-semibold">{header}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {filtered.map((transaction) => (
-              <tr key={transaction.id} className="border-b border-border last:border-b-0">
-                <td className="px-3 py-3">{transaction.date}</td>
-                <td className="px-3 py-3 font-medium">{transaction.merchant}</td>
-                <td className="px-3 py-3">{currency(transaction.amount)}</td>
-                <td className="px-3 py-3">
-                  <Select value={transaction.cardholder} onChange={(event) => patchTransaction(transaction.id, { cardholder: event.target.value as Transaction["cardholder"] })}>
+              <tr key={transaction.id} className="border-b border-border last:border-b-0 hover:bg-muted/25">
+                <td className="px-4 py-4 align-top text-muted-foreground">{transaction.date}</td>
+                <td className="max-w-[260px] px-4 py-4 align-top font-semibold">{transaction.merchant}</td>
+                <td className="px-4 py-4 align-top font-semibold">{currency(transaction.amount)}</td>
+                <td className="px-4 py-4 align-top">
+                  <Select className="w-28" value={transaction.cardholder} onChange={(event) => patchTransaction(transaction.id, { cardholder: event.target.value as Transaction["cardholder"] })}>
                     <option>JF</option>
                     <option>Jade</option>
                   </Select>
                 </td>
-                <td className="px-3 py-3">
+                <td className="px-4 py-4 align-top">
                   <Select
+                    className="w-48"
                     value={transaction.paymentMethod}
                     onChange={(event) => {
                       const paymentMethod = event.target.value as Transaction["paymentMethod"];
@@ -673,39 +712,123 @@ function Transactions({ data, updateData, selectedMonth }: { data: AppData; upda
                     {paymentMethods.map((method) => <option key={method}>{method}</option>)}
                   </Select>
                 </td>
-                <td className="px-3 py-3">
-                  <Select value={transaction.category} onChange={(event) => patchTransaction(transaction.id, { category: event.target.value as Category })}>
+                <td className="px-4 py-4 align-top">
+                  <Select className="w-36" value={transaction.category} onChange={(event) => patchTransaction(transaction.id, { category: event.target.value as Category })}>
                     {categories.map((category) => <option key={category}>{category}</option>)}
                   </Select>
                 </td>
-                <td className="px-3 py-3">
-                  <Select value={transaction.tag} onChange={(event) => patchTransaction(transaction.id, { tag: event.target.value as Tag })}>
+                <td className="px-4 py-4 align-top">
+                  <Select className="w-32" value={transaction.tag} onChange={(event) => patchTransaction(transaction.id, { tag: event.target.value as Tag })}>
                     {tags.map((tag) => <option key={tag}>{tag}</option>)}
                   </Select>
                 </td>
-                <td className="px-3 py-3">
-                  <Select value={transaction.projectId} onChange={(event) => patchTransaction(transaction.id, { projectId: event.target.value })}>
+                <td className="px-4 py-4 align-top">
+                  <Select className="w-40" value={transaction.projectId} onChange={(event) => patchTransaction(transaction.id, { projectId: event.target.value })}>
                     <option value="">No project</option>
                     {data.projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
                   </Select>
                 </td>
-                <td className="px-3 py-3">
+                <td className="px-4 py-4 align-top">
                   <Textarea
-                    className="min-h-10"
+                    className="min-h-10 w-64"
                     placeholder="Add note"
                     value={transaction.notes}
                     onChange={(event) => patchTransaction(transaction.id, { notes: event.target.value })}
                   />
                 </td>
-                <td className="px-3 py-3">
+                <td className="px-4 py-4 align-top">
                   <Button variant="danger" size="sm" onClick={() => deleteTransaction(transaction.id)}>Delete</Button>
                 </td>
               </tr>
             ))}
+            {!filtered.length && (
+              <tr>
+                <td colSpan={10} className="px-4 py-10">
+                  <EmptyState title="No transactions found" detail="Adjust the filters or refresh from Google Sheets." />
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
     </div>
+  );
+}
+
+function TransactionMobileCard({
+  transaction,
+  projects,
+  patchTransaction,
+  deleteTransaction,
+}: {
+  transaction: Transaction;
+  projects: Project[];
+  patchTransaction: (id: string, patch: Partial<Transaction>) => void;
+  deleteTransaction: (id: string) => void;
+}) {
+  return (
+    <Card>
+      <CardContent className="space-y-4 p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold uppercase tracking-[0.02em]">{transaction.merchant}</p>
+            <p className="mt-1 text-xs text-muted-foreground">{transaction.date} · paid by {transaction.paidBy}</p>
+          </div>
+          <p className="money-figure shrink-0 text-lg font-semibold">{currency(transaction.amount)}</p>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <FieldLabel label="Cardholder">
+            <Select value={transaction.cardholder} onChange={(event) => patchTransaction(transaction.id, { cardholder: event.target.value as Transaction["cardholder"] })}>
+              <option>JF</option>
+              <option>Jade</option>
+            </Select>
+          </FieldLabel>
+          <FieldLabel label="Category">
+            <Select value={transaction.category} onChange={(event) => patchTransaction(transaction.id, { category: event.target.value as Category })}>
+              {categories.map((category) => <option key={category}>{category}</option>)}
+            </Select>
+          </FieldLabel>
+          <FieldLabel label="Method">
+            <Select
+              value={transaction.paymentMethod}
+              onChange={(event) => {
+                const paymentMethod = event.target.value as Transaction["paymentMethod"];
+                patchTransaction(transaction.id, { paymentMethod, paidBy: paidByForPaymentMethod(paymentMethod) });
+              }}
+            >
+              {paymentMethods.map((method) => <option key={method}>{method}</option>)}
+            </Select>
+          </FieldLabel>
+          <FieldLabel label="Tag">
+            <Select value={transaction.tag} onChange={(event) => patchTransaction(transaction.id, { tag: event.target.value as Tag })}>
+              {tags.map((tag) => <option key={tag}>{tag}</option>)}
+            </Select>
+          </FieldLabel>
+          <FieldLabel className="col-span-2" label="Project">
+            <Select value={transaction.projectId} onChange={(event) => patchTransaction(transaction.id, { projectId: event.target.value })}>
+              <option value="">No project</option>
+              {projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
+            </Select>
+          </FieldLabel>
+        </div>
+        <Textarea
+          className="min-h-20"
+          placeholder="Add note"
+          value={transaction.notes}
+          onChange={(event) => patchTransaction(transaction.id, { notes: event.target.value })}
+        />
+        <Button variant="danger" size="sm" onClick={() => deleteTransaction(transaction.id)}>Delete transaction</Button>
+      </CardContent>
+    </Card>
+  );
+}
+
+function FieldLabel({ label, className, children }: { label: string; className?: string; children: React.ReactNode }) {
+  return (
+    <label className={cn("space-y-1 text-xs font-medium uppercase tracking-[0.08em] text-muted-foreground", className)}>
+      <span>{label}</span>
+      {children}
+    </label>
   );
 }
 
@@ -1099,10 +1222,20 @@ function ReceiptScanner({ data, updateData, setTab }: { data: AppData; updateDat
   );
 }
 
-function SheetsSync({ data, onReset }: { data: AppData; onReset: () => void }) {
+function SheetsSync({
+  data,
+  onRefresh,
+  updateData,
+  onReset,
+}: {
+  data: AppData;
+  onRefresh: (endpoint: string) => Promise<void>;
+  updateData: (next: AppData | ((current: AppData) => AppData), message?: string) => void;
+  onReset: () => void;
+}) {
   const sheets = exportSheets(data);
-  const [endpoint, setEndpoint] = useState("");
-  const [status, setStatus] = useState("Ready to export six tabs for Google Sheets.");
+  const [endpoint, setEndpoint] = useState(data.settings.sheetsEndpoint);
+  const [status, setStatus] = useState("Ready to export and refresh Google Sheets data.");
 
   async function downloadJson() {
     const blob = new Blob([JSON.stringify(sheets, null, 2)], { type: "application/json" });
@@ -1134,6 +1267,7 @@ function SheetsSync({ data, onReset }: { data: AppData; onReset: () => void }) {
       setStatus("Use the deployed Google Apps Script Web App URL ending in /exec.");
       return;
     }
+    updateData((current) => ({ ...current, settings: { ...current.settings, sheetsEndpoint: trimmedEndpoint } }), "Saved Sheets endpoint");
     try {
       await fetch(trimmedEndpoint, {
         method: "POST",
@@ -1147,6 +1281,20 @@ function SheetsSync({ data, onReset }: { data: AppData; onReset: () => void }) {
     }
   }
 
+  async function refreshFromEndpoint() {
+    const trimmedEndpoint = endpoint.trim();
+    if (!trimmedEndpoint) {
+      setStatus("Add a Google Apps Script web app URL first.");
+      return;
+    }
+    try {
+      await onRefresh(trimmedEndpoint);
+      setStatus("Pulled the latest rows from Google Sheets.");
+    } catch {
+      setStatus("Refresh failed. Update the Apps Script code so GET export is enabled.");
+    }
+  }
+
   return (
     <div className="space-y-4">
       <Card>
@@ -1155,6 +1303,7 @@ function SheetsSync({ data, onReset }: { data: AppData; onReset: () => void }) {
           <Input placeholder="Google Apps Script web app URL" value={endpoint} onChange={(event) => setEndpoint(event.target.value)} />
           <div className="flex flex-wrap gap-2">
             <Button onClick={pushToEndpoint}><RefreshCw className="size-4" /> Sync now</Button>
+            <Button variant="secondary" onClick={refreshFromEndpoint}><RefreshCw className="size-4" /> Refresh from Sheets</Button>
             <Button variant="secondary" onClick={downloadJson}><Download className="size-4" /> Export JSON</Button>
             <Button variant="secondary" onClick={onReset}><Settings2 className="size-4" /> Reset app data</Button>
           </div>
@@ -1189,4 +1338,170 @@ function downloadBlob(blob: Blob, fileName: string) {
   anchor.download = fileName;
   anchor.click();
   URL.revokeObjectURL(url);
+}
+
+type SheetWorkbook = Record<string, Record<string, unknown>[]>;
+
+function pullSheets(endpoint: string): Promise<SheetWorkbook> {
+  const url = new URL(endpoint);
+  url.searchParams.set("action", "export");
+  return jsonp<SheetWorkbook | { data: SheetWorkbook }>(url.toString()).then((payload) => {
+    const maybeWrapped = payload as { data?: SheetWorkbook };
+    return maybeWrapped.data ?? (payload as SheetWorkbook);
+  });
+}
+
+function jsonp<T>(url: string): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const callback = `familyFinanceHub_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+    const script = document.createElement("script");
+    const separator = url.includes("?") ? "&" : "?";
+    const cleanup = () => {
+      script.remove();
+      delete (window as typeof window & Record<string, unknown>)[callback];
+    };
+
+    (window as typeof window & Record<string, (payload: T) => void>)[callback] = (payload) => {
+      cleanup();
+      resolve(payload);
+    };
+    script.onerror = () => {
+      cleanup();
+      reject(new Error("Sheets refresh failed"));
+    };
+    script.src = `${url}${separator}callback=${callback}`;
+    document.body.appendChild(script);
+  });
+}
+
+function mergeWorkbookIntoData(current: AppData, workbook: SheetWorkbook, endpoint: string): AppData {
+  const settings = workbook.Settings?.[0] ?? {};
+  const transactions = [...(workbook.Transactions ?? []), ...(workbook["Deleted Transactions"] ?? [])].map((row, index) => normalizeSheetTransaction(row, index));
+
+  return {
+    ...current,
+    settings: {
+      ...current.settings,
+      startDate: rowString(settings, "startDate", current.settings.startDate),
+      carryOverBalance: rowNumber(settings, "carryOverBalance", current.settings.carryOverBalance),
+      sheetsEndpoint: endpoint,
+    },
+    transactions: workbook.Transactions || workbook["Deleted Transactions"] ? transactions : current.transactions,
+    imports: workbook.Imports ? workbook.Imports.map(normalizeSheetImport) : current.imports,
+    rules: workbook.Rules ? workbook.Rules.map(normalizeSheetRule) : current.rules,
+    rentLedger: workbook["Rent Ledger"] ? workbook["Rent Ledger"].map(normalizeSheetRentEntry) : current.rentLedger,
+    babyPurchases: workbook["Baby Purchases"] ? workbook["Baby Purchases"].map(normalizeSheetBabyPurchase) : current.babyPurchases,
+    registry: workbook["Baby Registry"] ? workbook["Baby Registry"].map(normalizeSheetRegistryItem) : current.registry,
+    projects: workbook.Projects ? workbook.Projects.map(normalizeSheetProject) : current.projects,
+  };
+}
+
+function normalizeSheetTransaction(row: Record<string, unknown>, index: number): Transaction {
+  const paymentMethod = sheetEnum(rowString(row, "paymentMethod", "Other"), paymentMethods, "Other");
+  const cardholder = sheetEnum(rowString(row, "cardholder", "JF"), ["JF", "Jade"] as const, "JF");
+  const date = rowString(row, "date", new Date().toISOString().slice(0, 10));
+  return {
+    id: rowString(row, "id", `sheet-transaction-${index}`),
+    date,
+    merchant: rowString(row, "merchant", "UNKNOWN MERCHANT"),
+    amount: rowNumber(row, "amount", 0),
+    cardholder,
+    paidBy: sheetEnum(rowString(row, "paidBy", paidByForPaymentMethod(paymentMethod)), ["JF", "Jade"] as const, paidByForPaymentMethod(paymentMethod)),
+    paymentMethod,
+    statementMonth: rowString(row, "statementMonth", date.slice(0, 7)),
+    category: sheetEnum(rowString(row, "category", "Review"), categories, "Review"),
+    tag: sheetEnum(rowString(row, "tag", "Other"), tags, "Other"),
+    notes: rowString(row, "notes", ""),
+    projectId: rowString(row, "projectId", ""),
+    sourceType: sheetEnum(rowString(row, "sourceType", "manual"), ["statement", "receipt", "manual"] as const, "manual") as SourceType,
+    sourceId: rowString(row, "sourceId", rowString(row, "id", `sheet-transaction-${index}`)),
+    deletedAt: rowString(row, "deletedAt", ""),
+  };
+}
+
+function normalizeSheetRule(row: Record<string, unknown>, index: number): Rule {
+  return {
+    id: rowString(row, "id", `sheet-rule-${index}`),
+    merchantPattern: rowString(row, "merchantPattern", ""),
+    category: sheetEnum(rowString(row, "category", "Review"), categories, "Review"),
+    tag: sheetEnum(rowString(row, "tag", "Other"), tags, "Other"),
+    autoApply: rowBoolean(row, "autoApply", true),
+  };
+}
+
+function normalizeSheetRentEntry(row: Record<string, unknown>, index: number) {
+  return {
+    id: rowString(row, "id", `sheet-rent-${index}`),
+    date: rowString(row, "date", ""),
+    amount: rowNumber(row, "amount", 0),
+    description: rowString(row, "description", ""),
+  };
+}
+
+function normalizeSheetBabyPurchase(row: Record<string, unknown>, index: number) {
+  return {
+    id: rowString(row, "id", `sheet-baby-${index}`),
+    date: rowString(row, "date", ""),
+    item: rowString(row, "item", ""),
+    category: sheetEnum(rowString(row, "category", "Other"), babyCategories, "Other"),
+    amount: rowNumber(row, "amount", 0),
+    notes: rowString(row, "notes", ""),
+  };
+}
+
+function normalizeSheetRegistryItem(row: Record<string, unknown>, index: number) {
+  return {
+    id: rowString(row, "id", `sheet-registry-${index}`),
+    item: rowString(row, "item", ""),
+    category: sheetEnum(rowString(row, "category", "Other"), babyCategories, "Other"),
+    status: sheetEnum(rowString(row, "status", "Needed"), registryStatuses, "Needed"),
+    estimatedCost: rowNumber(row, "estimatedCost", 0),
+    notes: rowString(row, "notes", ""),
+  };
+}
+
+function normalizeSheetProject(row: Record<string, unknown>, index: number): Project {
+  return {
+    id: rowString(row, "id", `sheet-project-${index}`),
+    name: rowString(row, "name", "Untitled project"),
+    type: sheetEnum(rowString(row, "type", "Project"), ["Trip", "Project"] as const, "Project"),
+    notes: rowString(row, "notes", ""),
+    createdAt: rowString(row, "createdAt", new Date().toISOString()),
+  };
+}
+
+function normalizeSheetImport(row: Record<string, unknown>, index: number): ImportHistory {
+  return {
+    id: rowString(row, "id", `sheet-import-${index}`),
+    sourceId: rowString(row, "sourceId", ""),
+    statementName: rowString(row, "statementName", ""),
+    statementPeriod: rowString(row, "statementPeriod", ""),
+    fileName: rowString(row, "fileName", ""),
+    importedAt: rowString(row, "importedAt", ""),
+    statementMonth: rowString(row, "statementMonth", ""),
+    transactions: rowNumber(row, "transactions", 0),
+    reviewItems: rowNumber(row, "reviewItems", 0),
+  };
+}
+
+function sheetEnum<T extends string>(value: string, allowed: readonly T[], fallback: T): T {
+  return allowed.includes(value as T) ? (value as T) : fallback;
+}
+
+function rowString(row: Record<string, unknown>, key: string, fallback: string) {
+  const value = row[key];
+  if (value === undefined || value === null) return fallback;
+  return String(value);
+}
+
+function rowNumber(row: Record<string, unknown>, key: string, fallback: number) {
+  const value = Number(row[key]);
+  return Number.isFinite(value) ? value : fallback;
+}
+
+function rowBoolean(row: Record<string, unknown>, key: string, fallback: boolean) {
+  const value = row[key];
+  if (typeof value === "boolean") return value;
+  if (typeof value === "string") return value.toLowerCase() === "true";
+  return fallback;
 }

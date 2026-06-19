@@ -58,6 +58,7 @@ export const initialData: AppData = {
   settings: {
     startDate: "2026-02-28",
     carryOverBalance: 0,
+    sheetsEndpoint: "",
   },
   transactions: [],
   rules: initialRules,

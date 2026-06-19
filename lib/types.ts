@@ -110,6 +110,7 @@ export type AppData = {
   settings: {
     startDate: string;
     carryOverBalance: number;
+    sheetsEndpoint: string;
   };
   transactions: Transaction[];
   rules: Rule[];

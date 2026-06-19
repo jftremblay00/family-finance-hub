@@ -7,7 +7,7 @@
   --foreground: 219 22% 12%;
   --card: 40 33% 99%;
   --card-foreground: 219 22% 12%;
-  --primary: 222 42% 21%;
+  --primary: 151 47% 24%;
   --primary-foreground: 42 48% 97%;
   --muted: 42 18% 90%;
   --muted-foreground: 220 9% 43%;
@@ -15,7 +15,7 @@
   --accent-foreground: 219 22% 12%;
   --border: 42 18% 84%;
   --input: 42 18% 80%;
-  --ring: 218 58% 52%;
+  --ring: 151 47% 34%;
   --radius: 0.5rem;
   --success: 158 47% 36%;
   --warning: 36 82% 53%;
@@ -28,7 +28,7 @@
   --foreground: 43 34% 92%;
   --card: 222 15% 11%;
   --card-foreground: 43 34% 92%;
-  --primary: 210 76% 76%;
+  --primary: 148 43% 64%;
   --primary-foreground: 222 16% 8%;
   --muted: 220 13% 16%;
   --muted-foreground: 43 12% 66%;
@@ -36,7 +36,7 @@
   --accent-foreground: 222 16% 8%;
   --border: 220 12% 20%;
   --input: 220 12% 24%;
-  --ring: 210 76% 76%;
+  --ring: 148 43% 64%;
   --success: 156 46% 58%;
   --warning: 37 84% 61%;
   --lavender: 252 56% 74%;
@@ -56,8 +56,8 @@ body {
   min-height: 100vh;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.72), transparent 260px),
-    linear-gradient(90deg, rgba(25, 45, 76, 0.045) 1px, transparent 1px),
-    linear-gradient(180deg, rgba(25, 45, 76, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(24, 92, 65, 0.045) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(24, 92, 65, 0.035) 1px, transparent 1px),
     hsl(var(--background));
   background-size: auto, 32px 32px, 32px 32px, auto;
   color: hsl(var(--foreground));
