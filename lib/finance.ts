@@ -89,6 +89,44 @@ export function rowsToCsv(rows: Record<string, unknown>[]) {
   return [headers.join(","), ...rows.map((row) => headers.map((header) => escape(row[header])).join(","))].join("\n");
 }
 
+export function makeStatementSourceId(fileName: string, statementMonth: string) {
+  const lower = fileName.toLowerCase();
+  const issuer = lower.includes("bmo") ? "bmo-mastercard" : "";
+  const base = issuer || fileName
+    .replace(/\.pdf$/i, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+  return `${statementMonth}-${base || "bmo-mastercard"}`;
+}
+
+export function transactionFingerprint(transaction: Pick<Transaction, "date" | "merchant" | "amount" | "cardholder">) {
+  return [
+    transaction.date,
+    transaction.merchant.toUpperCase().replace(/\s+/g, " ").trim(),
+    transaction.amount.toFixed(2),
+    transaction.cardholder,
+  ].join("|");
+}
+
+export function uniqueTransactions(transactions: Transaction[], existing: Transaction[] = []) {
+  const seen = new Set(existing.map(transactionFingerprint));
+  const unique: Transaction[] = [];
+  let duplicates = 0;
+
+  for (const transaction of transactions) {
+    const fingerprint = transactionFingerprint(transaction);
+    if (seen.has(fingerprint)) {
+      duplicates += 1;
+      continue;
+    }
+    seen.add(fingerprint);
+    unique.push(transaction);
+  }
+
+  return { transactions: unique, duplicates };
+}
+
 export async function extractPdfTransactions(file: File, rules: Rule[], startDate?: string): Promise<Transaction[]> {
   const pdfjs = await import("pdfjs-dist");
   pdfjs.GlobalWorkerOptions.workerSrc = new URL("pdfjs-dist/build/pdf.worker.mjs", import.meta.url).toString();
@@ -107,6 +145,7 @@ export async function extractPdfTransactions(file: File, rules: Rule[], startDat
 
 export function parseStatementText(text: string, rules: Rule[], fileName = "BMO Mastercard statement.pdf") {
   const statementMonth = inferMonth(text) ?? new Date().toISOString().slice(0, 7);
+  const sourceId = makeStatementSourceId(fileName, statementMonth);
   let cardholder: Transaction["cardholder"] = "JF";
   const transactions: Transaction[] = [];
   const lines = text.split(/\n|(?=\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\.?\s+\d{1,2}\b)/i);
@@ -131,12 +170,13 @@ export function parseStatementText(text: string, rules: Rule[], fileName = "BMO 
       cardholder,
       statementMonth,
       notes: `Imported from ${fileName}`,
+      sourceType: "statement" as const,
+      sourceId,
     };
     transactions.push(applyRules(base, rules));
   }
 
-  if (transactions.length) return transactions;
-  return sampleImportedTransactions(statementMonth, rules, fileName);
+  return transactions;
 }
 
 export function isCardPaymentLine(merchant: string, amount: number) {
@@ -167,36 +207,18 @@ export function parseReceiptText(text: string) {
 }
 
 export function makeImportHistory(fileName: string, statementMonth: string, transactions: Transaction[]): ImportHistory {
+  const sourceId = transactions[0]?.sourceId ?? makeStatementSourceId(fileName, statementMonth);
   return {
     id: `imp-${Date.now()}`,
+    sourceId,
+    statementName: fileName.replace(/\.pdf$/i, ""),
+    statementPeriod: monthLabel(statementMonth),
     fileName,
     importedAt: new Date().toISOString(),
     statementMonth,
     transactions: transactions.length,
     reviewItems: transactions.filter((transaction) => transaction.category === "Review").length,
   };
-}
-
-function sampleImportedTransactions(statementMonth: string, rules: Rule[], fileName: string) {
-  return [
-    ["2026-06-18", "NESTERS MARKET", 67.84, "JF"],
-    ["2026-06-19", "PACIFIC BABY CO", 118.2, "Jade"],
-    ["2026-06-20", "AIR CANADA", 412.64, "JF"],
-    ["2026-06-21", "UNKNOWN ONLINE SHOP", 53.1, "Jade"],
-  ].map(([date, merchant, amount, cardholder], index) =>
-    applyRules(
-      {
-        id: `imp-fallback-${Date.now()}-${index}`,
-        date: String(date),
-        merchant: String(merchant),
-        amount: Number(amount),
-        cardholder: cardholder as Transaction["cardholder"],
-        statementMonth,
-        notes: `Imported from ${fileName}. Sample fallback used when statement text did not match the parser.`,
-      },
-      rules,
-    ),
-  );
 }
 
 function normalizeStatementDate(monthName: string, day: string, statementMonth: string) {

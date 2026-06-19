@@ -84,7 +84,17 @@ export const initialData: AppData = {
     { id: "reg-4", item: "Car seat", category: "Safety", status: "Needed", estimatedCost: 420, notes: "" },
   ],
   imports: [
-    { id: "imp-sample", fileName: "BMO Mastercard June sample.pdf", importedAt: "2026-06-16T10:00:00.000Z", statementMonth: "2026-06", transactions: 8, reviewItems: 1 },
+    {
+      id: "imp-sample",
+      sourceId: "2026-06-bmo-mastercard",
+      statementName: "BMO Mastercard June sample",
+      statementPeriod: "June 2026",
+      fileName: "BMO Mastercard June sample.pdf",
+      importedAt: "2026-06-16T10:00:00.000Z",
+      statementMonth: "2026-06",
+      transactions: 8,
+      reviewItems: 1,
+    },
   ],
 };
 
@@ -108,5 +118,7 @@ function tx(
     category,
     tag,
     notes,
+    sourceType: "manual",
+    sourceId: "sample-data",
   };
 }

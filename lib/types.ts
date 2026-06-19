@@ -22,6 +22,7 @@ export type BabyCategory =
   | "Other";
 
 export type RegistryStatus = "Needed" | "Purchased" | "Gifted";
+export type SourceType = "statement" | "receipt" | "manual";
 
 export type Transaction = {
   id: string;
@@ -33,6 +34,8 @@ export type Transaction = {
   category: Category;
   tag: Tag;
   notes: string;
+  sourceType: SourceType;
+  sourceId: string;
 };
 
 export type Rule = {
@@ -70,6 +73,9 @@ export type RegistryItem = {
 
 export type ImportHistory = {
   id: string;
+  sourceId: string;
+  statementName: string;
+  statementPeriod: string;
   fileName: string;
   importedAt: string;
   statementMonth: string;

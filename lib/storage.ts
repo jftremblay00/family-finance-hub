@@ -1,5 +1,5 @@
 import { initialData } from "./data";
-import type { AppData } from "./types";
+import type { AppData, ImportHistory, Transaction } from "./types";
 
 const key = "family-finance-hub-data";
 
@@ -25,6 +25,7 @@ export function resetData() {
 }
 
 function normalizeData(data: Partial<AppData>): AppData {
+  const imports = (data.imports ?? initialData.imports).map(normalizeImport);
   return {
     ...initialData,
     ...data,
@@ -32,11 +33,42 @@ function normalizeData(data: Partial<AppData>): AppData {
       ...initialData.settings,
       ...data.settings,
     },
-    transactions: data.transactions ?? initialData.transactions,
+    transactions: (data.transactions ?? initialData.transactions).map(normalizeTransaction),
     rules: data.rules ?? initialData.rules,
     rentLedger: data.rentLedger ?? initialData.rentLedger,
     babyPurchases: data.babyPurchases ?? initialData.babyPurchases,
     registry: data.registry ?? initialData.registry,
-    imports: data.imports ?? initialData.imports,
+    imports,
   };
+}
+
+function normalizeTransaction(transaction: Transaction): Transaction {
+  const importedFile = transaction.notes?.match(/Imported from ([^.]+(?:\.pdf)?)/i)?.[1];
+  const statementSourceId = importedFile ? makeStoredStatementSourceId(importedFile, transaction.statementMonth) : undefined;
+  return {
+    ...transaction,
+    sourceType: transaction.sourceType ?? (importedFile ? "statement" : "manual"),
+    sourceId: transaction.sourceId ?? statementSourceId ?? "manual-entry",
+  };
+}
+
+function normalizeImport(item: ImportHistory): ImportHistory {
+  const sourceId = item.sourceId ?? makeStoredStatementSourceId(item.fileName, item.statementMonth);
+  return {
+    ...item,
+    sourceId,
+    statementName: item.statementName ?? item.fileName.replace(/\.pdf$/i, ""),
+    statementPeriod: item.statementPeriod ?? item.statementMonth,
+  };
+}
+
+function makeStoredStatementSourceId(fileName: string, statementMonth: string) {
+  const lower = fileName.toLowerCase();
+  const issuer = lower.includes("bmo") ? "bmo-mastercard" : "";
+  const cleaned = issuer || fileName
+    .replace(/\.pdf$/i, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+  return `${statementMonth}-${cleaned || "statement"}`;
 }

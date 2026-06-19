@@ -41,9 +41,10 @@ import {
   parseReceiptText,
   rowsToCsv,
   runReceiptOcr,
+  uniqueTransactions,
 } from "@/lib/finance";
 import { loadData, resetData, saveData } from "@/lib/storage";
-import type { AppData, BabyCategory, Category, RegistryStatus, Tag, Transaction } from "@/lib/types";
+import type { AppData, BabyCategory, Category, ImportHistory, RegistryStatus, Tag, Transaction } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input, Select } from "@/components/ui/input";
@@ -368,27 +369,71 @@ function FormulaRow({ label, value, strong = false }: { label: string; value: st
 function StatementImport({ data, updateData }: { data: AppData; updateData: (next: AppData | ((current: AppData) => AppData), message?: string) => void }) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState(`Upload a BMO Mastercard PDF. Imports start from ${data.settings.startDate}; card payments are skipped.`);
+  const [pendingImport, setPendingImport] = useState<{ history: ImportHistory; transactions: Transaction[] } | null>(null);
 
   async function onFile(file?: File) {
     if (!file) return;
     setBusy(true);
     try {
-      const transactions = await extractPdfTransactions(file, data.rules, data.settings.startDate);
-      const statementMonth = transactions[0]?.statementMonth ?? currentStatementMonth(data.transactions);
-      updateData(
-        (current) => ({
-          ...current,
-          transactions: [...transactions, ...current.transactions],
-          imports: [makeImportHistory(file.name, statementMonth, transactions), ...current.imports],
-        }),
-        `Imported ${transactions.length} transactions from ${file.name}`,
-      );
-      setMessage(`${transactions.length} transactions imported from ${data.settings.startDate} onward. Card payments were skipped.`);
+      const parsedTransactions = await extractPdfTransactions(file, data.rules, data.settings.startDate);
+      const statementMonth = parsedTransactions[0]?.statementMonth ?? currentStatementMonth(data.transactions);
+      const history = makeImportHistory(file.name, statementMonth, parsedTransactions);
+      const existingStatement = data.imports.find((item) => item.sourceId === history.sourceId || item.statementMonth === history.statementMonth);
+
+      if (!parsedTransactions.length) {
+        setPendingImport(null);
+        setMessage(`No expense transactions were found from ${data.settings.startDate} onward. No data was imported.`);
+        return;
+      }
+
+      if (existingStatement) {
+        const replacementHistory = { ...history, sourceId: existingStatement.sourceId };
+        const replacementTransactions = parsedTransactions.map((transaction) => ({ ...transaction, sourceId: existingStatement.sourceId }));
+        setPendingImport({ history: replacementHistory, transactions: replacementTransactions });
+        setMessage("Statement already imported. Cancel or replace the existing statement.");
+        return;
+      }
+
+      commitStatementImport(history, parsedTransactions, false);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Import failed");
     } finally {
       setBusy(false);
     }
+  }
+
+  function commitStatementImport(history: ImportHistory, transactions: Transaction[], replaceExisting: boolean) {
+    updateData((current) => {
+      const retainedTransactions = replaceExisting ? current.transactions.filter((transaction) => transaction.sourceId !== history.sourceId) : current.transactions;
+      const retainedImports = replaceExisting ? current.imports.filter((item) => item.sourceId !== history.sourceId) : current.imports;
+      const unique = uniqueTransactions(transactions, retainedTransactions);
+      const finalHistory = {
+        ...history,
+        transactions: unique.transactions.length,
+        reviewItems: unique.transactions.filter((transaction) => transaction.category === "Review").length,
+      };
+
+      setPendingImport(null);
+      setMessage(
+        replaceExisting
+          ? `Replaced ${history.statementName} with ${unique.transactions.length} transactions.`
+          : `Imported ${unique.transactions.length} transactions. ${unique.duplicates} duplicates skipped.`,
+      );
+
+      return {
+        ...current,
+        transactions: [...unique.transactions, ...retainedTransactions],
+        imports: [finalHistory, ...retainedImports],
+      };
+    }, replaceExisting ? "Statement replaced" : "Statement imported");
+  }
+
+  function deleteStatement(statement: ImportHistory) {
+    updateData((current) => ({
+      ...current,
+      transactions: current.transactions.filter((transaction) => transaction.sourceId !== statement.sourceId),
+      imports: current.imports.filter((item) => item.sourceId !== statement.sourceId),
+    }), `Deleted ${statement.statementName}`);
   }
 
   return (
@@ -412,22 +457,37 @@ function StatementImport({ data, updateData }: { data: AppData; updateData: (nex
             <span className="mt-1 text-xs text-muted-foreground">{message}</span>
             <input type="file" accept="application/pdf" className="sr-only" disabled={busy} onChange={(event) => void onFile(event.target.files?.[0])} />
           </label>
+          {pendingImport && (
+            <div className="rounded-lg border border-warning/30 bg-warning/10 p-4">
+              <p className="text-sm font-semibold">Statement already imported</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {pendingImport.history.statementName} is already in Statement Management. Replace it to delete the old transactions and import this fresh version.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Button variant="secondary" onClick={() => setPendingImport(null)}>Cancel</Button>
+                <Button onClick={() => commitStatementImport(pendingImport.history, pendingImport.transactions, true)}>Replace Existing</Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
       <section>
-        <h2 className="mb-3 text-sm font-semibold">Import history</h2>
+        <h2 className="mb-3 text-sm font-semibold">Statement Management</h2>
         <div className="overflow-hidden rounded-lg border border-border bg-card">
           {data.imports.map((item) => (
-            <div key={item.id} className="grid gap-1 border-b border-border p-4 last:border-b-0 sm:grid-cols-[1fr_auto_auto] sm:items-center">
+            <div key={item.id} className="grid gap-3 border-b border-border p-4 last:border-b-0 lg:grid-cols-[1.5fr_1fr_auto_auto_auto] lg:items-center">
               <div>
-                <p className="text-sm font-medium">{item.fileName}</p>
-                <p className="text-xs text-muted-foreground">{new Date(item.importedAt).toLocaleString()} · {monthLabel(item.statementMonth)}</p>
+                <p className="text-sm font-medium">{item.statementName}</p>
+                <p className="text-xs text-muted-foreground">{item.fileName}</p>
               </div>
-              <p className="text-sm">{item.transactions} transactions</p>
-              <p className="text-sm text-muted-foreground">{item.reviewItems} review</p>
+              <p className="text-sm">{item.statementPeriod}</p>
+              <p className="text-sm text-muted-foreground">{new Date(item.importedAt).toLocaleString()}</p>
+              <p className="text-sm">{item.transactions} transactions · {item.reviewItems} review</p>
+              <Button variant="danger" size="sm" onClick={() => deleteStatement(item)}>Delete</Button>
             </div>
           ))}
+          {!data.imports.length && <EmptyState title="No statements imported" detail="Uploaded BMO Mastercard statements will appear here." />}
         </div>
       </section>
     </div>
@@ -739,14 +799,17 @@ function ReceiptScanner({ data, updateData, setTab }: { data: AppData; updateDat
   }
 
   function saveReceipt() {
+    const sourceId = `receipt-${Date.now()}`;
     const transactionBase = {
-      id: `receipt-${Date.now()}`,
+      id: sourceId,
       date: receipt.date,
       merchant: receipt.merchant || "Receipt merchant",
       amount: Number(receipt.amount || 0),
       cardholder: "Jade" as const,
       statementMonth: receipt.date.slice(0, 7),
       notes: "Created from receipt scan",
+      sourceType: "receipt" as const,
+      sourceId,
     };
     const transaction = receipt.category === "Review" ? { ...transactionBase, category: "Review" as Category, tag: receipt.tag } : applyRules({ ...transactionBase, merchant: transactionBase.merchant }, data.rules);
     const finalTransaction = { ...transaction, category: receipt.category, tag: receipt.tag };
