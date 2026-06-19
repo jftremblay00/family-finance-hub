@@ -25,7 +25,9 @@ export function resetData() {
 }
 
 function normalizeData(data: Partial<AppData>): AppData {
-  const imports = (data.imports ?? initialData.imports).map(normalizeImport);
+  const rawImports = (data.imports ?? initialData.imports).map(normalizeImport);
+  const imports = rawImports.filter((item) => item.id !== "imp-sample" && !/sample/i.test(item.statementName));
+  const sampleRentIds = new Set(["rent-mar", "rent-apr", "rent-may", "rent-jun"]);
   return {
     ...initialData,
     ...data,
@@ -33,11 +35,13 @@ function normalizeData(data: Partial<AppData>): AppData {
       ...initialData.settings,
       ...data.settings,
     },
-    transactions: (data.transactions ?? initialData.transactions).map(normalizeTransaction),
+    transactions: (data.transactions ?? initialData.transactions)
+      .map(normalizeTransaction)
+      .filter((transaction) => transaction.sourceId !== "sample-data" && transaction.sourceId !== "2026-06-bmo-mastercard"),
     rules: data.rules ?? initialData.rules,
-    rentLedger: data.rentLedger ?? initialData.rentLedger,
-    babyPurchases: data.babyPurchases ?? initialData.babyPurchases,
-    registry: data.registry ?? initialData.registry,
+    rentLedger: (data.rentLedger ?? initialData.rentLedger).filter((entry) => !sampleRentIds.has(entry.id)),
+    babyPurchases: (data.babyPurchases ?? initialData.babyPurchases).filter((purchase) => !["baby-1", "baby-2", "baby-3"].includes(purchase.id)),
+    registry: (data.registry ?? initialData.registry).filter((item) => !["reg-1", "reg-2", "reg-3", "reg-4"].includes(item.id)),
     imports,
   };
 }

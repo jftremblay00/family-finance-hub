@@ -147,7 +147,7 @@ export default function FamilyFinanceHub() {
               onReset={() => {
                 resetData();
                 setData(loadData());
-                setToast("Sample data restored");
+                setToast("App data cleared");
               }}
             />
           )}
@@ -378,7 +378,7 @@ function StatementImport({ data, updateData }: { data: AppData; updateData: (nex
       const parsedTransactions = await extractPdfTransactions(file, data.rules, data.settings.startDate);
       const statementMonth = parsedTransactions[0]?.statementMonth ?? currentStatementMonth(data.transactions);
       const history = makeImportHistory(file.name, statementMonth, parsedTransactions);
-      const existingStatement = data.imports.find((item) => item.sourceId === history.sourceId || item.statementMonth === history.statementMonth);
+      const existingStatement = data.imports.find((item) => item.sourceId === history.sourceId);
 
       if (!parsedTransactions.length) {
         setPendingImport(null);
@@ -913,7 +913,7 @@ function SheetsSync({ data, onReset }: { data: AppData; onReset: () => void }) {
           <div className="flex flex-wrap gap-2">
             <Button onClick={pushToEndpoint}><RefreshCw className="size-4" /> Sync now</Button>
             <Button variant="secondary" onClick={downloadJson}><Download className="size-4" /> Export JSON</Button>
-            <Button variant="secondary" onClick={onReset}><Settings2 className="size-4" /> Reset sample data</Button>
+            <Button variant="secondary" onClick={onReset}><Settings2 className="size-4" /> Reset app data</Button>
           </div>
           <p className="text-sm text-muted-foreground">{status}</p>
         </CardContent>

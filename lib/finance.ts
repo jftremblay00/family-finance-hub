@@ -144,7 +144,7 @@ export async function extractPdfTransactions(file: File, rules: Rule[], startDat
 }
 
 export function parseStatementText(text: string, rules: Rule[], fileName = "BMO Mastercard statement.pdf") {
-  const statementMonth = inferMonth(text) ?? new Date().toISOString().slice(0, 7);
+  const statementMonth = inferMonth(`${fileName}\n${text}`) ?? new Date().toISOString().slice(0, 7);
   const sourceId = makeStatementSourceId(fileName, statementMonth);
   let cardholder: Transaction["cardholder"] = "JF";
   const transactions: Transaction[] = [];
@@ -239,9 +239,17 @@ function normalizeReceiptDate(value?: string) {
 }
 
 function inferMonth(text: string) {
-  const match = text.match(/\b(20\d{2})[-/ ](0?[1-9]|1[0-2])\b/);
-  if (!match) return undefined;
-  return `${match[1]}-${String(Number(match[2])).padStart(2, "0")}`;
+  const numericMatch = text.match(/\b(20\d{2})[-/ ](0?[1-9]|1[0-2])\b/);
+  if (numericMatch) return `${numericMatch[1]}-${String(Number(numericMatch[2])).padStart(2, "0")}`;
+
+  const monthNameMatch = text.match(
+    /\b(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\b[\s._-]*(20\d{2})/i,
+  );
+  if (!monthNameMatch) return undefined;
+  const month = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"].findIndex((name) =>
+    monthNameMatch[1].toLowerCase().startsWith(name),
+  );
+  return `${monthNameMatch[2]}-${String(month + 1).padStart(2, "0")}`;
 }
 
 function buildMonthlySummary(data: AppData) {
