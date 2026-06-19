@@ -57,11 +57,19 @@ function normalizeTransaction(transaction: Transaction): Transaction {
   return {
     ...transaction,
     paidBy: transaction.paidBy ?? "JF",
+    paymentMethod: transaction.paymentMethod ?? inferPaymentMethod(transaction),
     projectId: transaction.projectId ?? "",
     sourceType: transaction.sourceType ?? (importedFile ? "statement" : "manual"),
     sourceId: transaction.sourceId ?? statementSourceId ?? "manual-entry",
     deletedAt: transaction.deletedAt ?? "",
   };
+}
+
+function inferPaymentMethod(transaction: Transaction) {
+  if (transaction.sourceType === "statement") return transaction.cardholder === "Jade" ? "Mastercard Jade" : "Mastercard JF";
+  if (transaction.sourceType === "receipt") return "Other";
+  if (transaction.paidBy === "Jade") return "Cash Jade";
+  return "Cash JF";
 }
 
 function normalizeImport(item: ImportHistory): ImportHistory {

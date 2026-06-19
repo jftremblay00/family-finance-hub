@@ -1,9 +1,14 @@
-import type { AppData, BabyCategory, Category, RegistryStatus, Rule, Tag } from "./types";
+import type { AppData, BabyCategory, Category, PaymentMethod, RegistryStatus, Rule, Tag, Transaction } from "./types";
 
 export const categories: Category[] = ["Shared", "JF Personal", "Jade Personal", "Baby", "Review"];
 export const tags: Tag[] = ["Grocery", "Restaurant", "Coffee", "Home", "Costco", "IKEA", "Travel", "Insurance", "Subscription", "Baby", "Medical", "Other"];
+export const paymentMethods: PaymentMethod[] = ["Cash JF", "Cash Jade", "Mastercard JF", "Mastercard Jade", "Jade Personal Credit Card", "JF Visa Personal", "Other"];
 export const babyCategories: BabyCategory[] = ["Furniture", "Transportation", "Feeding", "Diapers", "Clothing", "Health", "Toys", "Safety", "Other"];
 export const registryStatuses: RegistryStatus[] = ["Needed", "Purchased", "Gifted"];
+
+export function paidByForPaymentMethod(paymentMethod: PaymentMethod): Transaction["paidBy"] {
+  return paymentMethod === "Cash Jade" || paymentMethod === "Mastercard Jade" || paymentMethod === "Jade Personal Credit Card" ? "Jade" : "JF";
+}
 
 const sharedMerchants = [
   ["HECTOR'S", "Restaurant"],

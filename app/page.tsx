@@ -24,7 +24,7 @@ import {
   WalletCards,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { babyCategories, categories, registryStatuses, tags } from "@/lib/data";
+import { babyCategories, categories, paidByForPaymentMethod, paymentMethods, registryStatuses, tags } from "@/lib/data";
 import {
   activeBabyPurchases,
   activeRentLedger,
@@ -549,7 +549,7 @@ function Transactions({ data, updateData, selectedMonth }: { data: AppData; upda
     merchant: "",
     amount: "",
     cardholder: "JF" as Transaction["cardholder"],
-    paidBy: "JF" as Transaction["paidBy"],
+    paymentMethod: "Cash JF" as Transaction["paymentMethod"],
     category: "Review" as Category,
     tag: "Other" as Tag,
     projectId: "",
@@ -580,7 +580,8 @@ function Transactions({ data, updateData, selectedMonth }: { data: AppData; upda
       merchant: manual.merchant.trim().toUpperCase(),
       amount: Number(manual.amount),
       cardholder: manual.cardholder,
-      paidBy: manual.paidBy,
+      paidBy: paidByForPaymentMethod(manual.paymentMethod),
+      paymentMethod: manual.paymentMethod,
       statementMonth: manual.date.slice(0, 7),
       category: manual.category,
       tag: manual.tag,
@@ -622,9 +623,8 @@ function Transactions({ data, updateData, selectedMonth }: { data: AppData; upda
             <option>JF</option>
             <option>Jade</option>
           </Select>
-          <Select value={manual.paidBy} onChange={(event) => setManual({ ...manual, paidBy: event.target.value as Transaction["paidBy"] })}>
-            <option value="JF">Paid by JF</option>
-            <option value="Jade">Paid by Jade</option>
+          <Select value={manual.paymentMethod} onChange={(event) => setManual({ ...manual, paymentMethod: event.target.value as Transaction["paymentMethod"] })}>
+            {paymentMethods.map((method) => <option key={method}>{method}</option>)}
           </Select>
           <Select value={manual.category} onChange={(event) => setManual({ ...manual, category: event.target.value as Category })}>
             {categories.map((category) => <option key={category}>{category}</option>)}
@@ -645,7 +645,7 @@ function Transactions({ data, updateData, selectedMonth }: { data: AppData; upda
         <table className="w-full min-w-[1180px] text-left text-sm">
           <thead className="border-b border-border bg-muted/60 text-xs uppercase text-muted-foreground">
             <tr>
-              {["Date", "Merchant", "Amount", "Cardholder", "Paid by", "Category", "Tag", "Project", "Note", ""].map((header) => (
+              {["Date", "Merchant", "Amount", "Cardholder", "Method", "Category", "Tag", "Project", "Note", ""].map((header) => (
                 <th key={header} className="px-3 py-3 font-semibold">{header}</th>
               ))}
             </tr>
@@ -663,9 +663,14 @@ function Transactions({ data, updateData, selectedMonth }: { data: AppData; upda
                   </Select>
                 </td>
                 <td className="px-3 py-3">
-                  <Select value={transaction.paidBy} onChange={(event) => patchTransaction(transaction.id, { paidBy: event.target.value as Transaction["paidBy"] })}>
-                    <option value="JF">JF</option>
-                    <option value="Jade">Jade</option>
+                  <Select
+                    value={transaction.paymentMethod}
+                    onChange={(event) => {
+                      const paymentMethod = event.target.value as Transaction["paymentMethod"];
+                      patchTransaction(transaction.id, { paymentMethod, paidBy: paidByForPaymentMethod(paymentMethod) });
+                    }}
+                  >
+                    {paymentMethods.map((method) => <option key={method}>{method}</option>)}
                   </Select>
                 </td>
                 <td className="px-3 py-3">
@@ -1041,6 +1046,7 @@ function ReceiptScanner({ data, updateData, setTab }: { data: AppData; updateDat
       amount: Number(receipt.amount || 0),
       cardholder: "Jade" as const,
       paidBy: "Jade" as const,
+      paymentMethod: "Other" as const,
       statementMonth: receipt.date.slice(0, 7),
       notes: "",
       projectId: "",

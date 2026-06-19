@@ -26,6 +26,14 @@ export type BabyCategory =
 
 export type RegistryStatus = "Needed" | "Purchased" | "Gifted";
 export type SourceType = "statement" | "receipt" | "manual";
+export type PaymentMethod =
+  | "Cash JF"
+  | "Cash Jade"
+  | "Mastercard JF"
+  | "Mastercard Jade"
+  | "Jade Personal Credit Card"
+  | "JF Visa Personal"
+  | "Other";
 
 export type Project = {
   id: string;
@@ -42,6 +50,7 @@ export type Transaction = {
   amount: number;
   cardholder: "JF" | "Jade";
   paidBy: "JF" | "Jade";
+  paymentMethod: PaymentMethod;
   statementMonth: string;
   category: Category;
   tag: Tag;

@@ -196,6 +196,7 @@ export function parseStatementText(text: string, rules: Rule[], fileName = "BMO 
       amount,
       cardholder,
       paidBy: "JF" as const,
+      paymentMethod: cardholder === "Jade" ? ("Mastercard Jade" as const) : ("Mastercard JF" as const),
       statementMonth,
       notes: "",
       projectId: "",
