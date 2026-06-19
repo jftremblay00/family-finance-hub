@@ -879,7 +879,15 @@ function SheetsSync({ data, onReset }: { data: AppData; onReset: () => void }) {
       setStatus("Add a Google Apps Script web app URL first.");
       return;
     }
-    if (!trimmedEndpoint.endsWith("/exec")) {
+    const isAppsScriptExecUrl = (() => {
+      try {
+        const url = new URL(trimmedEndpoint);
+        return url.hostname === "script.google.com" && url.pathname.endsWith("/exec");
+      } catch {
+        return false;
+      }
+    })();
+    if (!isAppsScriptExecUrl) {
       setStatus("Use the deployed Google Apps Script Web App URL ending in /exec.");
       return;
     }
