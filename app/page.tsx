@@ -1287,6 +1287,7 @@ function SheetsSync({
       setStatus("Add a Google Apps Script web app URL first.");
       return;
     }
+    updateData((current) => ({ ...current, settings: { ...current.settings, sheetsEndpoint: trimmedEndpoint } }), "Saved Sheets endpoint");
     try {
       await onRefresh(trimmedEndpoint);
       setStatus("Pulled the latest rows from Google Sheets.");
