@@ -27,6 +27,14 @@ export type BabyCategory =
 export type RegistryStatus = "Needed" | "Purchased" | "Gifted";
 export type SourceType = "statement" | "receipt" | "manual";
 
+export type Project = {
+  id: string;
+  name: string;
+  type: "Trip" | "Project";
+  notes: string;
+  createdAt: string;
+};
+
 export type Transaction = {
   id: string;
   date: string;
@@ -37,6 +45,7 @@ export type Transaction = {
   category: Category;
   tag: Tag;
   notes: string;
+  projectId: string;
   sourceType: SourceType;
   sourceId: string;
 };
@@ -96,5 +105,6 @@ export type AppData = {
   rentLedger: RentEntry[];
   babyPurchases: BabyPurchase[];
   registry: RegistryItem[];
+  projects: Project[];
   imports: ImportHistory[];
 };

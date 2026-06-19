@@ -9,6 +9,7 @@ import {
   CreditCard,
   Download,
   FileText,
+  FolderKanban,
   Home,
   Moon,
   PiggyBank,
@@ -44,14 +45,14 @@ import {
   uniqueTransactions,
 } from "@/lib/finance";
 import { loadData, resetData, saveData } from "@/lib/storage";
-import type { AppData, BabyCategory, Category, ImportHistory, RegistryStatus, Tag, Transaction } from "@/lib/types";
+import type { AppData, BabyCategory, Category, ImportHistory, Project, RegistryStatus, Tag, Transaction } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input, Select, Textarea } from "@/components/ui/input";
 import { cn } from "@/components/ui/utils";
 import { ActivityRow, InsightCard, MetricCard, MiniRail, PageIntro, SectionHeader, StatusBadge } from "@/components/design-system";
 
-type Tab = "dashboard" | "import" | "transactions" | "review" | "rent" | "baby" | "registry" | "scanner" | "sync";
+type Tab = "dashboard" | "import" | "transactions" | "review" | "rent" | "baby" | "registry" | "projects" | "scanner" | "sync";
 type TransactionFilters = {
   month: string;
   category: string;
@@ -65,6 +66,7 @@ const navItems: { id: Tab; label: string; icon: typeof Home }[] = [
   { id: "transactions", label: "Cards", icon: CreditCard },
   { id: "review", label: "Review", icon: Check },
   { id: "baby", label: "Baby", icon: Baby },
+  { id: "projects", label: "Projects", icon: FolderKanban },
   { id: "scanner", label: "Scan", icon: Camera },
 ];
 
@@ -73,6 +75,7 @@ const allTabs: { id: Tab; label: string; icon: typeof Home }[] = [
   { id: "import", label: "Import", icon: Upload },
   { id: "rent", label: "Rent", icon: Home },
   { id: "registry", label: "Registry", icon: ReceiptText },
+  { id: "projects", label: "Projects", icon: FolderKanban },
   { id: "sync", label: "Sheets", icon: RefreshCw },
 ];
 
@@ -140,6 +143,7 @@ export default function FamilyFinanceHub() {
           {tab === "rent" && <RentLedger data={data} updateData={updateData} />}
           {tab === "baby" && <BabySpending data={data} updateData={updateData} />}
           {tab === "registry" && <BabyRegistry data={data} updateData={updateData} />}
+          {tab === "projects" && <Projects data={data} updateData={updateData} setTab={setTab} />}
           {tab === "scanner" && <ReceiptScanner data={data} updateData={updateData} setTab={setTab} />}
           {tab === "sync" && (
             <SheetsSync
@@ -155,7 +159,7 @@ export default function FamilyFinanceHub() {
       </div>
 
       <nav className="fixed inset-x-0 bottom-0 z-20 border-t border-border/70 bg-card/92 px-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pt-2 shadow-panel backdrop-blur-xl md:hidden">
-        <div className="mx-auto grid max-w-md grid-cols-5 gap-1 rounded-lg bg-muted/45 p-1">
+        <div className="mx-auto grid max-w-lg grid-cols-6 gap-1 rounded-lg bg-muted/45 p-1">
           {navItems.map((item) => (
             <NavButton key={item.id} active={tab === item.id} item={item} onClick={() => setTab(item.id)} mobile />
           ))}
@@ -544,6 +548,7 @@ function Transactions({ data, updateData, selectedMonth }: { data: AppData; upda
     cardholder: "JF" as Transaction["cardholder"],
     category: "Review" as Category,
     tag: "Other" as Tag,
+    projectId: "",
     notes: "",
   });
   const transactions = activeTransactions(data);
@@ -574,6 +579,7 @@ function Transactions({ data, updateData, selectedMonth }: { data: AppData; upda
       category: manual.category,
       tag: manual.tag,
       notes: manual.notes.trim(),
+      projectId: manual.projectId,
       sourceType: "manual",
       sourceId: id,
     };
@@ -605,6 +611,10 @@ function Transactions({ data, updateData, selectedMonth }: { data: AppData; upda
           <Select value={manual.tag} onChange={(event) => setManual({ ...manual, tag: event.target.value as Tag })}>
             {tags.map((tag) => <option key={tag}>{tag}</option>)}
           </Select>
+          <Select value={manual.projectId} onChange={(event) => setManual({ ...manual, projectId: event.target.value })}>
+            <option value="">No project</option>
+            {data.projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
+          </Select>
           <Textarea className="md:col-span-2" placeholder="Note" value={manual.notes} onChange={(event) => setManual({ ...manual, notes: event.target.value })} />
           <Button className="md:col-span-2 xl:col-span-4" onClick={addManualTransaction}><Plus className="size-4" /> Add transaction</Button>
         </CardContent>
@@ -614,7 +624,7 @@ function Transactions({ data, updateData, selectedMonth }: { data: AppData; upda
         <table className="w-full min-w-[980px] text-left text-sm">
           <thead className="border-b border-border bg-muted/60 text-xs uppercase text-muted-foreground">
             <tr>
-              {["Date", "Merchant", "Amount", "Cardholder", "Category", "Tag", "Note"].map((header) => (
+              {["Date", "Merchant", "Amount", "Cardholder", "Category", "Tag", "Project", "Note"].map((header) => (
                 <th key={header} className="px-3 py-3 font-semibold">{header}</th>
               ))}
             </tr>
@@ -639,6 +649,12 @@ function Transactions({ data, updateData, selectedMonth }: { data: AppData; upda
                 <td className="px-3 py-3">
                   <Select value={transaction.tag} onChange={(event) => patchTransaction(transaction.id, { tag: event.target.value as Tag })}>
                     {tags.map((tag) => <option key={tag}>{tag}</option>)}
+                  </Select>
+                </td>
+                <td className="px-3 py-3">
+                  <Select value={transaction.projectId} onChange={(event) => patchTransaction(transaction.id, { projectId: event.target.value })}>
+                    <option value="">No project</option>
+                    {data.projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
                   </Select>
                 </td>
                 <td className="px-3 py-3">
@@ -880,6 +896,92 @@ function BabyRegistry({ data, updateData }: { data: AppData; updateData: (next: 
   );
 }
 
+function Projects({ data, updateData, setTab }: { data: AppData; updateData: (next: AppData | ((current: AppData) => AppData), message?: string) => void; setTab: (tab: Tab) => void }) {
+  const [form, setForm] = useState({ name: "", type: "Trip" as Project["type"], notes: "" });
+  const transactions = activeTransactions(data);
+
+  function addProject() {
+    if (!form.name.trim()) return;
+    const project: Project = {
+      id: `project-${Date.now()}`,
+      name: form.name.trim(),
+      type: form.type,
+      notes: form.notes.trim(),
+      createdAt: new Date().toISOString(),
+    };
+    updateData((current) => ({ ...current, projects: [project, ...current.projects] }), "Project added");
+    setForm({ name: "", type: "Trip", notes: "" });
+  }
+
+  function deleteProject(projectId: string) {
+    updateData((current) => ({
+      ...current,
+      projects: current.projects.filter((project) => project.id !== projectId),
+      transactions: current.transactions.map((transaction) => (transaction.projectId === projectId ? { ...transaction, projectId: "" } : transaction)),
+    }), "Project deleted");
+  }
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardHeader>
+          <CardTitle>Add trip or project</CardTitle>
+          <p className="text-sm text-muted-foreground">Create a bucket, then assign transactions to it from the Transactions screen.</p>
+        </CardHeader>
+        <CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[1fr_160px_1fr_auto]">
+          <Input placeholder="Name" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} />
+          <Select value={form.type} onChange={(event) => setForm({ ...form, type: event.target.value as Project["type"] })}>
+            <option>Trip</option>
+            <option>Project</option>
+          </Select>
+          <Input placeholder="Note" value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} />
+          <Button onClick={addProject}><Plus className="size-4" /> Add</Button>
+        </CardContent>
+      </Card>
+
+      <div className="grid gap-3 lg:grid-cols-2">
+        {data.projects.map((project) => {
+          const projectTransactions = transactions.filter((transaction) => transaction.projectId === project.id);
+          const total = projectTransactions.reduce((sum, transaction) => sum + transaction.amount, 0);
+          return (
+            <Card key={project.id}>
+              <CardHeader>
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <CardTitle>{project.name}</CardTitle>
+                    <p className="mt-1 text-sm text-muted-foreground">{project.type} · {projectTransactions.length} transactions</p>
+                  </div>
+                  <Button variant="danger" size="sm" onClick={() => deleteProject(project.id)}>Delete</Button>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="rounded-lg border border-border/70 bg-muted/35 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Tracked total</p>
+                  <p className="money-figure mt-2 text-2xl font-semibold">{currency(total)}</p>
+                  {project.notes && <p className="mt-2 text-sm text-muted-foreground">{project.notes}</p>}
+                </div>
+                <div className="space-y-1">
+                  {projectTransactions.slice(0, 5).map((transaction) => (
+                    <ActivityRow
+                      key={transaction.id}
+                      title={transaction.merchant}
+                      meta={`${transaction.date} · ${transaction.category} · ${transaction.tag}`}
+                      amount={currency(transaction.amount)}
+                    />
+                  ))}
+                  {!projectTransactions.length && <EmptyState title="No transactions yet" detail="Assign transactions to this project from the Transactions screen." />}
+                </div>
+                <Button variant="secondary" size="sm" onClick={() => setTab("transactions")}>Assign transactions</Button>
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
+      {!data.projects.length && <EmptyState title="No trips or projects yet" detail="Create one to track spending for a vacation, renovation, event, or special purchase." />}
+    </div>
+  );
+}
+
 function ReceiptScanner({ data, updateData, setTab }: { data: AppData; updateData: (next: AppData | ((current: AppData) => AppData), message?: string) => void; setTab: (tab: Tab) => void }) {
   const [busy, setBusy] = useState(false);
   const [receipt, setReceipt] = useState({ merchant: "", date: new Date().toISOString().slice(0, 10), amount: "", category: "Review" as Category, tag: "Other" as Tag, createRegistry: false });
@@ -908,7 +1010,8 @@ function ReceiptScanner({ data, updateData, setTab }: { data: AppData; updateDat
       amount: Number(receipt.amount || 0),
       cardholder: "Jade" as const,
       statementMonth: receipt.date.slice(0, 7),
-      notes: "Created from receipt scan",
+      notes: "",
+      projectId: "",
       sourceType: "receipt" as const,
       sourceId,
     };

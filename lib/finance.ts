@@ -82,6 +82,7 @@ export function exportSheets(data: AppData) {
     "Rent Ledger": activeRentLedger(data),
     "Baby Purchases": activeBabyPurchases(data),
     "Baby Registry": data.registry,
+    Projects: data.projects,
     "Monthly Summary": monthly,
   };
 }
@@ -173,7 +174,8 @@ export function parseStatementText(text: string, rules: Rule[], fileName = "BMO 
       amount,
       cardholder,
       statementMonth,
-      notes: `Imported from ${fileName}`,
+      notes: "",
+      projectId: "",
       sourceType: "statement" as const,
       sourceId,
     };

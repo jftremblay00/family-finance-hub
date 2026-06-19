@@ -46,6 +46,7 @@ function normalizeData(data: Partial<AppData>): AppData {
     rentLedger: (data.rentLedger ?? initialData.rentLedger).filter((entry) => !sampleRentIds.has(entry.id)),
     babyPurchases: (data.babyPurchases ?? initialData.babyPurchases).filter((purchase) => !["baby-1", "baby-2", "baby-3"].includes(purchase.id)),
     registry: (data.registry ?? initialData.registry).filter((item) => !["reg-1", "reg-2", "reg-3", "reg-4"].includes(item.id)),
+    projects: data.projects ?? initialData.projects,
     imports,
   };
 }
@@ -55,6 +56,7 @@ function normalizeTransaction(transaction: Transaction): Transaction {
   const statementSourceId = importedFile ? makeStoredStatementSourceId(importedFile, transaction.statementMonth) : undefined;
   return {
     ...transaction,
+    projectId: transaction.projectId ?? "",
     sourceType: transaction.sourceType ?? (importedFile ? "statement" : "manual"),
     sourceId: transaction.sourceId ?? statementSourceId ?? "manual-entry",
   };

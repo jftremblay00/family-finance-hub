@@ -59,5 +59,6 @@ export const initialData: AppData = {
   rentLedger: [],
   babyPurchases: [],
   registry: [],
+  projects: [],
   imports: [],
 };
