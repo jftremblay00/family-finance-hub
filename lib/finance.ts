@@ -17,14 +17,17 @@ export function calculateSummary(data: AppData, month = currentStatementMonth(da
   const transactions = activeTransactions(data);
   const monthTransactions = transactions.filter((transaction) => transaction.statementMonth === month);
   const shared = sum(monthTransactions.filter((transaction) => transaction.category === "Shared"));
+  const jadePersonal = sum(monthTransactions.filter((transaction) => transaction.category === "Jade Personal"));
   const baby = sum(monthTransactions.filter((transaction) => transaction.category === "Baby"));
   const review = monthTransactions.filter((transaction) => transaction.category === "Review").length;
   const rentCredits = sum(activeRentLedger(data));
   const sharedOwedToJF = shared / 2;
-  const netPosition = sharedOwedToJF - rentCredits;
+  const jadePersonalOwedToJF = jadePersonal;
+  const totalOwedToJF = sharedOwedToJF + jadePersonalOwedToJF;
+  const netPosition = totalOwedToJF - rentCredits;
   const babyAllTime = sum(activeBabyPurchases(data));
 
-  return { month, shared, baby, review, rentCredits, sharedOwedToJF, netPosition, babyAllTime };
+  return { month, shared, jadePersonal, baby, review, rentCredits, sharedOwedToJF, jadePersonalOwedToJF, totalOwedToJF, netPosition, babyAllTime };
 }
 
 export function activeTransactions(data: AppData) {
@@ -261,6 +264,8 @@ function buildMonthlySummary(data: AppData) {
       month,
       sharedExpenses: summary.shared,
       jadeShare: summary.sharedOwedToJF,
+      jadePersonal: summary.jadePersonalOwedToJF,
+      totalOwedToJF: summary.totalOwedToJF,
       rentCredits: summary.rentCredits,
       netPosition: summary.netPosition,
       babySpending: summary.baby,

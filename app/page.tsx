@@ -229,7 +229,7 @@ function Dashboard({
   const topBabyCategory = Object.entries(babyBreakdown).sort((a, b) => b[1] - a[1])[0];
   const largestMonthly = [...transactions.filter((transaction) => transaction.statementMonth === month)].sort((a, b) => b.amount - a.amount)[0];
   const kpis = [
-    { label: "Net position", value: netPositionCopy(summary.netPosition), detail: `${currency(summary.sharedOwedToJF)} shared half - ${currency(summary.rentCredits)} rent`, tone: "ink" as const, icon: <Scale className="size-4" />, action: "See math" },
+    { label: "Net position", value: netPositionCopy(summary.netPosition), detail: `${currency(summary.totalOwedToJF)} owed - ${currency(summary.rentCredits)} rent`, tone: "ink" as const, icon: <Scale className="size-4" />, action: "See math" },
     { label: "Shared this month", value: currency(summary.shared), detail: `${monthLabel(month)} household spend`, tone: "paper" as const, icon: <WalletCards className="size-4" /> },
     { label: "Baby this month", value: currency(summary.baby), detail: topBabyCategory ? `${topBabyCategory[0]} leads spending` : "No baby spending yet", tone: "coral" as const, icon: <Baby className="size-4" /> },
     { label: "Needs review", value: String(summary.review), detail: "Unknown merchants to classify", tone: summary.review > 0 ? ("lavender" as const) : ("mint" as const), icon: <AlertCircle className="size-4" /> },
@@ -262,10 +262,12 @@ function Dashboard({
           <div className="space-y-4">
             <div className="rounded-lg border border-border/70 bg-muted/35 p-4">
               <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Formula</p>
-              <p className="mt-2 text-lg font-semibold tracking-[-0.02em]">Shared expenses / 2 - rent credits</p>
+              <p className="mt-2 text-lg font-semibold tracking-[-0.02em]">Shared half + Jade personal - rent credits</p>
             </div>
             <FormulaRow label="Total shared expenses" value={currency(summary.shared)} />
             <FormulaRow label="Jade share at 50%" value={currency(summary.sharedOwedToJF)} />
+            <FormulaRow label="Jade personal owed to JF" value={currency(summary.jadePersonalOwedToJF)} />
+            <FormulaRow label="Total owed to JF" value={currency(summary.totalOwedToJF)} />
             <FormulaRow label="Rent credits paid by Jade" value={`-${currency(summary.rentCredits)}`} />
             <div className="border-t border-border/70 pt-4">
               <FormulaRow label="Net position" value={netPositionCopy(summary.netPosition)} strong />
@@ -307,7 +309,7 @@ function Dashboard({
           </Card>
           <InsightCard title="This month at a glance">
             <div className="space-y-5">
-              <MiniRail label="Shared split" value={summary.sharedOwedToJF} max={Math.max(summary.shared, summary.rentCredits)} />
+              <MiniRail label="Owed to JF" value={summary.totalOwedToJF} max={Math.max(summary.totalOwedToJF, summary.rentCredits)} />
               <MiniRail label="Rent credits" value={summary.rentCredits} max={Math.max(summary.shared, summary.rentCredits)} />
               <div className="rounded-lg border border-border/70 bg-muted/35 p-4">
                 <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Largest transaction</p>
