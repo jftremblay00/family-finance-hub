@@ -55,6 +55,7 @@ import { ActivityRow, InsightCard, MetricCard, MiniRail, PageIntro, SectionHeade
 type Tab = "dashboard" | "import" | "transactions" | "review" | "rent" | "baby" | "registry" | "projects" | "scanner" | "sync";
 type TransactionFilters = {
   month: string;
+  date: string;
   category: string;
   tag: string;
   cardholder: string;
@@ -63,7 +64,7 @@ type TransactionFilters = {
 
 const navItems: { id: Tab; label: string; icon: typeof Home }[] = [
   { id: "dashboard", label: "Home", icon: Home },
-  { id: "transactions", label: "Cards", icon: CreditCard },
+  { id: "transactions", label: "All Transactions", icon: CreditCard },
   { id: "review", label: "Review", icon: Check },
   { id: "baby", label: "Baby", icon: Baby },
   { id: "projects", label: "Projects", icon: FolderKanban },
@@ -542,7 +543,7 @@ function StatementImport({ data, updateData }: { data: AppData; updateData: (nex
 }
 
 function Transactions({ data, updateData, selectedMonth }: { data: AppData; updateData: (next: AppData | ((current: AppData) => AppData), message?: string) => void; selectedMonth: string }) {
-  const [filters, setFilters] = useState({ month: selectedMonth, category: "All", tag: "All", cardholder: "All", search: "" });
+  const [filters, setFilters] = useState({ month: selectedMonth, date: "", category: "All", tag: "All", cardholder: "All", search: "" });
   const [manual, setManual] = useState({
     date: new Date().toISOString().slice(0, 10),
     merchant: "",
@@ -558,12 +559,13 @@ function Transactions({ data, updateData, selectedMonth }: { data: AppData; upda
   const filtered = transactions.filter((transaction) => {
     return (
       (filters.month === "All" || transaction.statementMonth === filters.month) &&
+      (!filters.date || transaction.date === filters.date) &&
       (filters.category === "All" || transaction.category === filters.category) &&
       (filters.tag === "All" || transaction.tag === filters.tag) &&
       (filters.cardholder === "All" || transaction.cardholder === filters.cardholder) &&
       transaction.merchant.toLowerCase().includes(filters.search.toLowerCase())
     );
-  });
+  }).sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id));
 
   function patchTransaction(id: string, patch: Partial<Transaction>) {
     updateData((current) => ({ ...current, transactions: current.transactions.map((item) => (item.id === id ? { ...item, ...patch } : item)) }), "Transaction updated");
@@ -712,11 +714,12 @@ function FilterBar({
   months: string[];
 }) {
   return (
-    <div className="grid gap-2 rounded-lg border border-border bg-card p-3 sm:grid-cols-2 lg:grid-cols-5">
+    <div className="grid gap-2 rounded-lg border border-border bg-card p-3 sm:grid-cols-2 lg:grid-cols-6">
       <div className="relative sm:col-span-2 lg:col-span-1">
         <Search className="pointer-events-none absolute left-3 top-3 size-4 text-muted-foreground" />
         <Input className="pl-9" placeholder="Search merchant" value={filters.search} onChange={(event) => setFilters((current) => ({ ...current, search: event.target.value }))} />
       </div>
+      <Input type="date" value={filters.date} onChange={(event) => setFilters((current) => ({ ...current, date: event.target.value }))} />
       <Select value={filters.month} onChange={(event) => setFilters((current) => ({ ...current, month: event.target.value }))}>
         <option>All</option>
         {months.map((month) => <option key={month}>{month}</option>)}
