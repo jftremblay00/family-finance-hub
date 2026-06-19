@@ -41,6 +41,7 @@ export type Transaction = {
   merchant: string;
   amount: number;
   cardholder: "JF" | "Jade";
+  paidBy: "JF" | "Jade";
   statementMonth: string;
   category: Category;
   tag: Tag;
@@ -48,6 +49,7 @@ export type Transaction = {
   projectId: string;
   sourceType: SourceType;
   sourceId: string;
+  deletedAt: string;
 };
 
 export type Rule = {

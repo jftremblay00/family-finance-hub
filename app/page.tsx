@@ -267,11 +267,13 @@ function Dashboard({
           <div className="space-y-4">
             <div className="rounded-lg border border-border/70 bg-muted/35 p-4">
               <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Formula</p>
-              <p className="mt-2 text-lg font-semibold tracking-[-0.02em]">Shared half + Jade personal + carry-over - rent credits</p>
+              <p className="mt-2 text-lg font-semibold tracking-[-0.02em]">JF-paid share - Jade-paid share + personal + carry-over - rent</p>
             </div>
             <FormulaRow label="Total shared expenses" value={currency(summary.shared)} />
-            <FormulaRow label="Jade share at 50%" value={currency(summary.sharedOwedToJF)} />
+            <FormulaRow label="Shared paid by JF, Jade owes half" value={currency(summary.sharedPaidByJF)} />
+            <FormulaRow label="Shared paid by Jade, JF owes half" value={`-${currency(summary.sharedPaidByJade)}`} />
             <FormulaRow label="Jade personal owed to JF" value={currency(summary.jadePersonalOwedToJF)} />
+            <FormulaRow label="JF personal paid by Jade" value={`-${currency(summary.jfPersonalPaidByJade)}`} />
             <FormulaRow label="Total owed to JF" value={currency(summary.totalOwedToJF)} />
             <FormulaRow label="Carry-over balance" value={currency(summary.carryOverBalance)} />
             <FormulaRow label="Rent credits paid by Jade" value={`-${currency(summary.rentCredits)}`} />
@@ -546,6 +548,7 @@ function Transactions({ data, updateData, selectedMonth }: { data: AppData; upda
     merchant: "",
     amount: "",
     cardholder: "JF" as Transaction["cardholder"],
+    paidBy: "JF" as Transaction["paidBy"],
     category: "Review" as Category,
     tag: "Other" as Tag,
     projectId: "",
@@ -575,6 +578,7 @@ function Transactions({ data, updateData, selectedMonth }: { data: AppData; upda
       merchant: manual.merchant.trim().toUpperCase(),
       amount: Number(manual.amount),
       cardholder: manual.cardholder,
+      paidBy: manual.paidBy,
       statementMonth: manual.date.slice(0, 7),
       category: manual.category,
       tag: manual.tag,
@@ -582,9 +586,20 @@ function Transactions({ data, updateData, selectedMonth }: { data: AppData; upda
       projectId: manual.projectId,
       sourceType: "manual",
       sourceId: id,
+      deletedAt: "",
     };
     updateData((current) => ({ ...current, transactions: [transaction, ...current.transactions] }), "Manual transaction added");
     setManual({ ...manual, merchant: "", amount: "", notes: "" });
+  }
+
+  function deleteTransaction(id: string) {
+    updateData(
+      (current) => ({
+        ...current,
+        transactions: current.transactions.map((item) => (item.id === id ? { ...item, deletedAt: new Date().toISOString() } : item)),
+      }),
+      "Transaction deleted",
+    );
   }
 
   return (
@@ -605,6 +620,10 @@ function Transactions({ data, updateData, selectedMonth }: { data: AppData; upda
             <option>JF</option>
             <option>Jade</option>
           </Select>
+          <Select value={manual.paidBy} onChange={(event) => setManual({ ...manual, paidBy: event.target.value as Transaction["paidBy"] })}>
+            <option value="JF">Paid by JF</option>
+            <option value="Jade">Paid by Jade</option>
+          </Select>
           <Select value={manual.category} onChange={(event) => setManual({ ...manual, category: event.target.value as Category })}>
             {categories.map((category) => <option key={category}>{category}</option>)}
           </Select>
@@ -621,10 +640,10 @@ function Transactions({ data, updateData, selectedMonth }: { data: AppData; upda
       </Card>
       <FilterBar filters={filters} setFilters={setFilters} months={[...new Set(transactions.map((item) => item.statementMonth))].sort().reverse()} />
       <div className="overflow-x-auto rounded-lg border border-border bg-card">
-        <table className="w-full min-w-[980px] text-left text-sm">
+        <table className="w-full min-w-[1180px] text-left text-sm">
           <thead className="border-b border-border bg-muted/60 text-xs uppercase text-muted-foreground">
             <tr>
-              {["Date", "Merchant", "Amount", "Cardholder", "Category", "Tag", "Project", "Note"].map((header) => (
+              {["Date", "Merchant", "Amount", "Cardholder", "Paid by", "Category", "Tag", "Project", "Note", ""].map((header) => (
                 <th key={header} className="px-3 py-3 font-semibold">{header}</th>
               ))}
             </tr>
@@ -639,6 +658,12 @@ function Transactions({ data, updateData, selectedMonth }: { data: AppData; upda
                   <Select value={transaction.cardholder} onChange={(event) => patchTransaction(transaction.id, { cardholder: event.target.value as Transaction["cardholder"] })}>
                     <option>JF</option>
                     <option>Jade</option>
+                  </Select>
+                </td>
+                <td className="px-3 py-3">
+                  <Select value={transaction.paidBy} onChange={(event) => patchTransaction(transaction.id, { paidBy: event.target.value as Transaction["paidBy"] })}>
+                    <option value="JF">JF</option>
+                    <option value="Jade">Jade</option>
                   </Select>
                 </td>
                 <td className="px-3 py-3">
@@ -664,6 +689,9 @@ function Transactions({ data, updateData, selectedMonth }: { data: AppData; upda
                     value={transaction.notes}
                     onChange={(event) => patchTransaction(transaction.id, { notes: event.target.value })}
                   />
+                </td>
+                <td className="px-3 py-3">
+                  <Button variant="danger" size="sm" onClick={() => deleteTransaction(transaction.id)}>Delete</Button>
                 </td>
               </tr>
             ))}
@@ -1009,11 +1037,13 @@ function ReceiptScanner({ data, updateData, setTab }: { data: AppData; updateDat
       merchant: receipt.merchant || "Receipt merchant",
       amount: Number(receipt.amount || 0),
       cardholder: "Jade" as const,
+      paidBy: "Jade" as const,
       statementMonth: receipt.date.slice(0, 7),
       notes: "",
       projectId: "",
       sourceType: "receipt" as const,
       sourceId,
+      deletedAt: "",
     };
     const transaction = receipt.category === "Review" ? { ...transactionBase, category: "Review" as Category, tag: receipt.tag } : applyRules({ ...transactionBase, merchant: transactionBase.merchant }, data.rules);
     const finalTransaction = { ...transaction, category: receipt.category, tag: receipt.tag };

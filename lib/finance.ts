@@ -17,22 +17,43 @@ export function calculateSummary(data: AppData, month = currentStatementMonth(da
   const transactions = activeTransactions(data);
   const monthTransactions = transactions.filter((transaction) => transaction.statementMonth === month);
   const shared = sum(monthTransactions.filter((transaction) => transaction.category === "Shared"));
-  const jadePersonal = sum(monthTransactions.filter((transaction) => transaction.category === "Jade Personal"));
+  const sharedPaidByJF = sum(monthTransactions.filter((transaction) => transaction.category === "Shared" && transaction.paidBy === "JF")) / 2;
+  const sharedPaidByJade = sum(monthTransactions.filter((transaction) => transaction.category === "Shared" && transaction.paidBy === "Jade")) / 2;
+  const jadePersonal = sum(monthTransactions.filter((transaction) => transaction.category === "Jade Personal" && transaction.paidBy === "JF"));
+  const jfPersonalPaidByJade = sum(monthTransactions.filter((transaction) => transaction.category === "JF Personal" && transaction.paidBy === "Jade"));
   const baby = sum(monthTransactions.filter((transaction) => transaction.category === "Baby"));
   const review = monthTransactions.filter((transaction) => transaction.category === "Review").length;
   const rentCredits = sum(activeRentLedger(data));
-  const sharedOwedToJF = shared / 2;
+  const sharedOwedToJF = sharedPaidByJF - sharedPaidByJade;
   const jadePersonalOwedToJF = jadePersonal;
-  const totalOwedToJF = sharedOwedToJF + jadePersonalOwedToJF;
+  const totalOwedToJF = sharedOwedToJF + jadePersonalOwedToJF - jfPersonalPaidByJade;
   const carryOverBalance = data.settings.carryOverBalance;
   const netPosition = totalOwedToJF + carryOverBalance - rentCredits;
   const babyAllTime = sum(activeBabyPurchases(data));
 
-  return { month, shared, jadePersonal, baby, review, rentCredits, sharedOwedToJF, jadePersonalOwedToJF, totalOwedToJF, carryOverBalance, netPosition, babyAllTime };
+  return {
+    month,
+    shared,
+    sharedPaidByJF,
+    sharedPaidByJade,
+    jadePersonal,
+    jfPersonalPaidByJade,
+    baby,
+    review,
+    rentCredits,
+    sharedOwedToJF,
+    jadePersonalOwedToJF,
+    totalOwedToJF,
+    carryOverBalance,
+    netPosition,
+    babyAllTime,
+  };
 }
 
 export function activeTransactions(data: AppData) {
-  return data.transactions.filter((transaction) => isOnOrAfterStartDate(transaction.date, data.settings.startDate) && !isCardPaymentLine(transaction.merchant, transaction.amount));
+  return data.transactions.filter(
+    (transaction) => !transaction.deletedAt && isOnOrAfterStartDate(transaction.date, data.settings.startDate) && !isCardPaymentLine(transaction.merchant, transaction.amount),
+  );
 }
 
 export function activeRentLedger(data: AppData) {
@@ -78,6 +99,7 @@ export function exportSheets(data: AppData) {
   return {
     Settings: [{ startDate: data.settings.startDate, carryOverBalance: data.settings.carryOverBalance }],
     Transactions: activeTransactions(data),
+    "Deleted Transactions": data.transactions.filter((transaction) => transaction.deletedAt),
     Rules: data.rules,
     "Rent Ledger": activeRentLedger(data),
     "Baby Purchases": activeBabyPurchases(data),
@@ -173,11 +195,13 @@ export function parseStatementText(text: string, rules: Rule[], fileName = "BMO 
       merchant: merchant.trim().toUpperCase(),
       amount,
       cardholder,
+      paidBy: "JF" as const,
       statementMonth,
       notes: "",
       projectId: "",
       sourceType: "statement" as const,
       sourceId,
+      deletedAt: "",
     };
     transactions.push(applyRules(base, rules));
   }
@@ -266,8 +290,11 @@ function buildMonthlySummary(data: AppData) {
     return {
       month,
       sharedExpenses: summary.shared,
-      jadeShare: summary.sharedOwedToJF,
+      sharedPaidByJF: summary.sharedPaidByJF,
+      sharedPaidByJade: summary.sharedPaidByJade,
+      netSharedOwedToJF: summary.sharedOwedToJF,
       jadePersonal: summary.jadePersonalOwedToJF,
+      jfPersonalPaidByJade: summary.jfPersonalPaidByJade,
       totalOwedToJF: summary.totalOwedToJF,
       carryOverBalance: summary.carryOverBalance,
       rentCredits: summary.rentCredits,

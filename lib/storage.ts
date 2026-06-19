@@ -56,9 +56,11 @@ function normalizeTransaction(transaction: Transaction): Transaction {
   const statementSourceId = importedFile ? makeStoredStatementSourceId(importedFile, transaction.statementMonth) : undefined;
   return {
     ...transaction,
+    paidBy: transaction.paidBy ?? "JF",
     projectId: transaction.projectId ?? "",
     sourceType: transaction.sourceType ?? (importedFile ? "statement" : "manual"),
     sourceId: transaction.sourceId ?? statementSourceId ?? "manual-entry",
+    deletedAt: transaction.deletedAt ?? "",
   };
 }
 
