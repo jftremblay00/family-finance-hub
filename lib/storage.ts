@@ -38,7 +38,11 @@ function normalizeData(data: Partial<AppData>): AppData {
     transactions: (data.transactions ?? initialData.transactions)
       .map(normalizeTransaction)
       .filter((transaction) => transaction.sourceId !== "sample-data" && transaction.sourceId !== "2026-06-bmo-mastercard"),
-    rules: data.rules ?? initialData.rules,
+    rules: (data.rules ?? initialData.rules).map((rule) => {
+      if (rule.merchantPattern === "COSTCO") return { ...rule, tag: "Costco" };
+      if (rule.merchantPattern === "IKEA") return { ...rule, tag: "IKEA" };
+      return rule;
+    }),
     rentLedger: (data.rentLedger ?? initialData.rentLedger).filter((entry) => !sampleRentIds.has(entry.id)),
     babyPurchases: (data.babyPurchases ?? initialData.babyPurchases).filter((purchase) => !["baby-1", "baby-2", "baby-3"].includes(purchase.id)),
     registry: (data.registry ?? initialData.registry).filter((item) => !["reg-1", "reg-2", "reg-3", "reg-4"].includes(item.id)),

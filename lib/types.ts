@@ -2,7 +2,10 @@ export type Category = "Shared" | "JF Personal" | "Jade Personal" | "Baby" | "Re
 export type Tag =
   | "Grocery"
   | "Restaurant"
+  | "Coffee"
   | "Home"
+  | "Costco"
+  | "IKEA"
   | "Travel"
   | "Insurance"
   | "Subscription"

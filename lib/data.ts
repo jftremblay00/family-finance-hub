@@ -1,15 +1,15 @@
 import type { AppData, BabyCategory, Category, RegistryStatus, Rule, Tag } from "./types";
 
 export const categories: Category[] = ["Shared", "JF Personal", "Jade Personal", "Baby", "Review"];
-export const tags: Tag[] = ["Grocery", "Restaurant", "Home", "Travel", "Insurance", "Subscription", "Baby", "Medical", "Other"];
+export const tags: Tag[] = ["Grocery", "Restaurant", "Coffee", "Home", "Costco", "IKEA", "Travel", "Insurance", "Subscription", "Baby", "Medical", "Other"];
 export const babyCategories: BabyCategory[] = ["Furniture", "Transportation", "Feeding", "Diapers", "Clothing", "Health", "Toys", "Safety", "Other"];
 export const registryStatuses: RegistryStatus[] = ["Needed", "Purchased", "Gifted"];
 
 const sharedMerchants = [
   ["HECTOR'S", "Restaurant"],
   ["SAVE ON", "Grocery"],
-  ["COSTCO", "Grocery"],
-  ["IKEA", "Home"],
+  ["COSTCO", "Costco"],
+  ["IKEA", "IKEA"],
   ["HOME DEPOT", "Home"],
   ["CANADIAN TIRE", "Home"],
   ["BCAA", "Insurance"],
