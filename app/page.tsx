@@ -150,6 +150,9 @@ export default function FamilyFinanceHub() {
                   </option>
                 ))}
               </Select>
+              <Button variant="secondary" size="sm" onClick={() => setTab("sync")} className="md:hidden">
+                <RefreshCw className="size-4" /> Pull data
+              </Button>
               <Button variant="secondary" size="icon" onClick={() => setDark((value) => !value)} aria-label="Toggle dark mode">
                 {dark ? <Sun className="size-4" /> : <Moon className="size-4" />}
               </Button>
@@ -1294,7 +1297,12 @@ function SheetsSync({
   return (
     <div className="space-y-4">
       <Card>
-        <CardHeader><CardTitle>Google Sheets sync</CardTitle><p className="text-sm text-muted-foreground">Exports active data from the start date onward. Google does not return readable browser responses, so confirm success in the Sheet tabs.</p></CardHeader>
+        <CardHeader>
+          <CardTitle>Google Sheets sync</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            Paste the Apps Script /exec URL on each device once. Sync pushes this device to Sheets; Refresh pulls Sheet data back down.
+          </p>
+        </CardHeader>
         <CardContent className="space-y-3">
           <Input placeholder="Google Apps Script web app URL" value={endpoint} onChange={(event) => setEndpoint(event.target.value)} />
           <div className="flex flex-wrap gap-2">
